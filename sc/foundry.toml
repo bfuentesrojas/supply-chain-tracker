@@ -1,0 +1,24 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.24"
+
+# Configuración para tests
+[profile.default.fuzz]
+runs = 256
+
+# Configuración de red local (Anvil)
+[rpc_endpoints]
+localhost = "http://127.0.0.1:8545"
+
+# Configuración de etherscan (para verificación futura)
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}" }
+
+
+
+
+
+
+

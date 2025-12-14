@@ -1,0 +1,432 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useWeb3 } from '@/contexts/Web3Context'
+import { useSupplyChain } from '@/hooks/useSupplyChain'
+import { Token, Transfer, User, formatUserStatus, formatTransferStatus, getUserStatusColor, getTransferStatusColor, formatRole, TransferStatus, EXPECTED_CHAIN_ID } from '@/contracts/SupplyChain'
+import { formatAddress, formatTimestamp } from '@/lib/web3Service'
+import Link from 'next/link'
+import { AccessGate } from '@/components/AccessGate'
+
+function DashboardContent() {
+  const { isConnected, account, chainId } = useWeb3()
+  const { 
+    getUserInfo, 
+    getUserTokens, 
+    getUserTransfers, 
+    getToken, 
+    getTransfer,
+    getTotalTokens, 
+    getTotalUsers,
+    getTotalTransfers,
+    isAdmin: checkIsAdmin,
+    acceptTransfer,
+    rejectTransfer,
+    isLoading: actionLoading,
+    error: actionError,
+    clearError
+  } = useSupplyChain()
+  
+  const [user, setUser] = useState<User | null>(null)
+  const [tokens, setTokens] = useState<Token[]>([])
+  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [stats, setStats] = useState({ totalTokens: 0, totalUsers: 0, totalTransfers: 0 })
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  const loadData = async () => {
+    // Verificar red antes de cargar datos
+    if (!isConnected || !account || chainId !== EXPECTED_CHAIN_ID) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // Verificar si es admin
+      const adminStatus = await checkIsAdmin(account)
+      setIsAdmin(adminStatus)
+
+      // Cargar datos del usuario
+      const userData = await getUserInfo(account)
+      setUser(userData)
+
+      // Cargar estadísticas
+      const [totalTokens, totalUsers, totalTransfers] = await Promise.all([
+        getTotalTokens(),
+        getTotalUsers(),
+        getTotalTransfers()
+      ])
+      setStats({
+        totalTokens: Number(totalTokens),
+        totalUsers: Number(totalUsers),
+        totalTransfers: Number(totalTransfers)
+      })
+
+      // Cargar tokens del usuario
+      const tokenIds = await getUserTokens(account)
+      const tokensData: Token[] = []
+      for (const id of tokenIds) {
+        const token = await getToken(id)
+        if (token) tokensData.push(token)
+      }
+      setTokens(tokensData)
+
+      // Cargar transferencias del usuario
+      const transferIds = await getUserTransfers(account)
+      const transfersData: Transfer[] = []
+      for (const id of transferIds) {
+        const transfer = await getTransfer(id)
+        if (transfer) transfersData.push(transfer)
+      }
+      setTransfers(transfersData)
+
+    } catch (error) {
+      console.error('Error cargando datos:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadData()
+  }, [isConnected, account, chainId])
+
+  const handleAcceptTransfer = async (transferId: bigint) => {
+    clearError()
+    const result = await acceptTransfer(transferId)
+    if (result) {
+      loadData()
+    }
+  }
+
+  const handleRejectTransfer = async (transferId: bigint) => {
+    clearError()
+    const result = await rejectTransfer(transferId)
+    if (result) {
+      loadData()
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    )
+  }
+
+  const pendingTransfers = transfers.filter(t => t.status === TransferStatus.Pending && t.to.toLowerCase() === account?.toLowerCase())
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold text-surface-800">Dashboard</h1>
+        {isAdmin && (
+          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold">
+            Admin
+          </span>
+        )}
+      </div>
+
+      {actionError && (
+        <div className="mb-6 p-4 bg-red-100 border border-red-200 rounded-xl flex items-center gap-3">
+          <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-red-800">{actionError}</p>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid md:grid-cols-4 gap-6 mb-8">
+        <div className="card">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Total Tokens</p>
+              <p className="text-2xl font-bold text-surface-800">{stats.totalTokens}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-accent-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Total Usuarios</p>
+              <p className="text-2xl font-bold text-surface-800">{stats.totalUsers}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Total Transferencias</p>
+              <p className="text-2xl font-bold text-surface-800">{stats.totalTransfers}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Mi Estado</p>
+              <p className="text-2xl font-bold text-surface-800">
+                {user ? formatUserStatus(user.status) : 'Sin registrar'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* User Info */}
+      {user && (
+        <div className="card mb-8">
+          <h2 className="text-xl font-semibold text-surface-800 mb-4">Mi Información</h2>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-surface-500">Rol</p>
+              <p className="font-medium text-surface-800">{formatRole(user.role)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Estado</p>
+              <span className={`status-badge ${getUserStatusColor(user.status)}`}>
+                {formatUserStatus(user.status)}
+              </span>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Dirección</p>
+              <p className="font-mono text-surface-800">{formatAddress(user.userAddress, 8)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-surface-500">Mis Tokens</p>
+              <p className="font-medium text-surface-800">{tokens.length}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Pending Transfers */}
+      {pendingTransfers.length > 0 && (
+        <div className="card mb-8 border-2 border-yellow-200">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h2 className="text-xl font-semibold text-surface-800">Transferencias Pendientes</h2>
+          </div>
+          <div className="space-y-4">
+            {pendingTransfers.map((t) => (
+              <div key={t.id.toString()} className="flex items-center justify-between p-4 bg-yellow-50 rounded-xl">
+                <div>
+                  <p className="font-medium text-surface-800">
+                    Transfer #{t.id.toString()} - Token #{t.tokenId.toString()}
+                  </p>
+                  <p className="text-sm text-surface-500">
+                    De: {formatAddress(t.from, 6)} | Cantidad: {t.amount.toString()}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleAcceptTransfer(t.id)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
+                    Aceptar
+                  </button>
+                  <button
+                    onClick={() => handleRejectTransfer(t.id)}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Quick Actions */}
+      <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <Link href="/products" className="card hover:-translate-y-1 transition-transform cursor-pointer group">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-accent-100 rounded-xl flex items-center justify-center group-hover:bg-accent-200 transition-colors">
+              <svg className="w-6 h-6 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-surface-800">Gestionar Tokens</h3>
+              <p className="text-sm text-surface-500">Crear y transferir tokens</p>
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/track" className="card hover:-translate-y-1 transition-transform cursor-pointer group">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center group-hover:bg-green-200 transition-colors">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-semibold text-surface-800">Buscar Token</h3>
+              <p className="text-sm text-surface-500">Ver información de tokens</p>
+            </div>
+          </div>
+        </Link>
+
+        {isAdmin && (
+          <Link href="/admin" className="card hover:-translate-y-1 transition-transform cursor-pointer group">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center group-hover:bg-purple-200 transition-colors">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="font-semibold text-surface-800">Panel Admin</h3>
+                <p className="text-sm text-surface-500">Gestionar usuarios</p>
+              </div>
+            </div>
+          </Link>
+        )}
+      </div>
+
+      {/* My Tokens Table */}
+      <div className="card mb-8">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-semibold text-surface-800">Mis Tokens</h2>
+          <Link href="/products" className="text-primary-600 hover:text-primary-700 font-medium text-sm">
+            Ver todos →
+          </Link>
+        </div>
+
+        {tokens.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-surface-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+              </svg>
+            </div>
+            <p className="text-surface-500">No tienes tokens</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-surface-200">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">ID</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Nombre</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Supply</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Creado</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.slice(0, 5).map((token) => (
+                  <tr key={token.id.toString()} className="border-b border-surface-100 hover:bg-surface-50">
+                    <td className="py-3 px-4 font-mono text-sm">#{token.id.toString()}</td>
+                    <td className="py-3 px-4 font-medium text-surface-800">{token.name}</td>
+                    <td className="py-3 px-4 text-surface-600">{token.totalSupply.toString()}</td>
+                    <td className="py-3 px-4 text-surface-600">{formatTimestamp(token.dateCreated)}</td>
+                    <td className="py-3 px-4">
+                      <Link
+                        href={`/track?id=${token.id}`}
+                        className="text-primary-600 hover:text-primary-700 font-medium text-sm"
+                      >
+                        Ver detalles
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Recent Transfers Table */}
+      <div className="card">
+        <h2 className="text-xl font-semibold text-surface-800 mb-6">Mis Transferencias</h2>
+
+        {transfers.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-surface-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+              </svg>
+            </div>
+            <p className="text-surface-500">No tienes transferencias</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-surface-200">
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">ID</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Token</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">De/Para</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Cantidad</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transfers.slice(0, 10).map((t) => (
+                  <tr key={t.id.toString()} className="border-b border-surface-100 hover:bg-surface-50">
+                    <td className="py-3 px-4 font-mono text-sm">#{t.id.toString()}</td>
+                    <td className="py-3 px-4">#{t.tokenId.toString()}</td>
+                    <td className="py-3 px-4 text-surface-600">
+                      {t.from.toLowerCase() === account?.toLowerCase() ? (
+                        <span>→ {formatAddress(t.to, 4)}</span>
+                      ) : (
+                        <span>← {formatAddress(t.from, 4)}</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">{t.amount.toString()}</td>
+                    <td className="py-3 px-4">
+                      <span className={`status-badge ${getTransferStatusColor(t.status)}`}>
+                        {formatTransferStatus(t.status)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function DashboardPage() {
+  return (
+    <AccessGate requireApproval={true}>
+      <DashboardContent />
+    </AccessGate>
+  )
+}
