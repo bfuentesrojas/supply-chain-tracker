@@ -9,6 +9,7 @@ import {
   UserStatus, 
   TransferStatus 
 } from '@/contracts/SupplyChain'
+import { parseTransactionError } from '@/lib/errorHandler'
 
 // Hook para operaciones del contrato SupplyChain
 export function useSupplyChain() {
@@ -36,7 +37,7 @@ export function useSupplyChain() {
       await tx.wait()
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al solicitar rol'
+      const message = parseTransactionError(err)
       setError(message)
       console.error('Error solicitando rol:', err)
       return false
@@ -63,7 +64,7 @@ export function useSupplyChain() {
       await tx.wait()
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al cambiar estado'
+      const message = parseTransactionError(err)
       setError(message)
       console.error('Error cambiando estado:', err)
       return false
@@ -150,7 +151,7 @@ export function useSupplyChain() {
       await tx.wait()
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al crear token'
+      const message = parseTransactionError(err)
       setError(message)
       console.error('Error creando token:', err)
       return false
@@ -219,7 +220,7 @@ export function useSupplyChain() {
       await tx.wait()
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al transferir'
+      const message = parseTransactionError(err)
       setError(message)
       console.error('Error transfiriendo:', err)
       return false
@@ -243,7 +244,7 @@ export function useSupplyChain() {
       await tx.wait()
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al aceptar transferencia'
+      const message = parseTransactionError(err)
       setError(message)
       console.error('Error aceptando transferencia:', err)
       return false
@@ -267,7 +268,7 @@ export function useSupplyChain() {
       await tx.wait()
       return true
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al rechazar transferencia'
+      const message = parseTransactionError(err)
       setError(message)
       console.error('Error rechazando transferencia:', err)
       return false
@@ -504,6 +505,45 @@ export function useSupplyChain() {
     }
   }, [contract])
 
+  // Obtener usuarios aprobados por rol (para transferencias)
+  const getUsersByRole = useCallback(async (targetRole: string): Promise<User[]> => {
+    if (!contract) return []
+
+    try {
+      const total = await contract.getTotalUsers()
+      const totalNum = Number(total)
+      
+      if (totalNum === 0) return []
+
+      const usersData: User[] = []
+      
+      for (let i = BigInt(1); i <= totalNum; i++) {
+        try {
+          const user = await contract.users(i)
+          if (
+            user.id > BigInt(0) && 
+            user.status === UserStatus.Approved &&
+            user.role.toLowerCase() === targetRole.toLowerCase()
+          ) {
+            usersData.push({
+              id: user.id,
+              userAddress: user.userAddress,
+              role: user.role,
+              status: Number(user.status) as UserStatus
+            })
+          }
+        } catch (err) {
+          // Continuar si hay error en un usuario
+        }
+      }
+
+      return usersData
+    } catch (err) {
+      console.error('Error obteniendo usuarios por rol:', err)
+      return []
+    }
+  }, [contract])
+
   return {
     // Estado
     isLoading,
@@ -516,6 +556,7 @@ export function useSupplyChain() {
     getUserInfo,
     getUserById,
     getAllUsers,
+    getUsersByRole,
     isAdmin,
     getAdmin,
     

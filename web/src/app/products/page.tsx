@@ -10,6 +10,7 @@ import {
   formatRole 
 } from '@/contracts/SupplyChain'
 import { formatTimestamp, isValidAddress } from '@/lib/web3Service'
+import { validateFeaturesJson } from '@/lib/schemaValidator'
 import Link from 'next/link'
 import { AccessGate } from '@/components/AccessGate'
 
@@ -22,6 +23,7 @@ function ProductsContent() {
     getTokenBalance,
     createToken, 
     transfer,
+    getUsersByRole,
     isLoading, 
     error, 
     clearError 
@@ -29,9 +31,12 @@ function ProductsContent() {
   
   const [user, setUser] = useState<User | null>(null)
   const [tokens, setTokens] = useState<(Token & { balance: bigint })[]>([])
+  const [availableRecipients, setAvailableRecipients] = useState<User[]>([])
+  const [loadingRecipients, setLoadingRecipients] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'transfer'>('list')
   const [success, setSuccess] = useState<string | null>(null)
+  const [balanceError, setBalanceError] = useState<string | null>(null)
 
   // Form states
   const [newToken, setNewToken] = useState({
@@ -46,6 +51,44 @@ function ProductsContent() {
     to: '',
     amount: ''
   })
+
+  // Determinar rol de destinatario según cadena de suministro
+  const getTargetRoleForTransfer = (userRole: string): string | null => {
+    const roleLower = userRole.toLowerCase()
+    if (roleLower === 'manufacturer' || roleLower === 'fabricante') {
+      return 'distributor' // Distribuidor
+    } else if (roleLower === 'distributor' || roleLower === 'distribuidor') {
+      return 'retailer' // Minorista
+    } else if (roleLower === 'retailer' || roleLower === 'minorista') {
+      return 'consumer' // Consumidor
+    }
+    return null
+  }
+
+  // Cargar destinatarios disponibles según el rol del usuario
+  const loadRecipients = async () => {
+    if (!user || !isConnected) {
+      setAvailableRecipients([])
+      return
+    }
+
+    const targetRole = getTargetRoleForTransfer(user.role)
+    if (!targetRole) {
+      setAvailableRecipients([])
+      return
+    }
+
+    setLoadingRecipients(true)
+    try {
+      const recipients = await getUsersByRole(targetRole)
+      setAvailableRecipients(recipients)
+    } catch (err) {
+      console.error('Error cargando destinatarios:', err)
+      setAvailableRecipients([])
+    } finally {
+      setLoadingRecipients(false)
+    }
+  }
 
   // Load data
   const loadData = async () => {
@@ -78,6 +121,13 @@ function ProductsContent() {
     }
   }
 
+  // Cargar destinatarios cuando cambia el usuario o se activa la pestaña de transferencia
+  useEffect(() => {
+    if (activeTab === 'transfer' && user) {
+      loadRecipients()
+    }
+  }, [activeTab, user])
+
   useEffect(() => {
     loadData()
   }, [isConnected, account])
@@ -106,9 +156,21 @@ function ProductsContent() {
     e.preventDefault()
     clearError()
     setSuccess(null)
+    setBalanceError(null)
 
-    if (!isValidAddress(transferData.to)) {
+    if (!transferData.to) {
+      setError('Debes seleccionar un destinatario')
       return
+    }
+
+    // Validar balance antes de transferir
+    const selectedToken = tokens.find(t => t.id.toString() === transferData.tokenId)
+    if (selectedToken) {
+      const transferAmount = BigInt(transferData.amount)
+      if (transferAmount > selectedToken.balance) {
+        setBalanceError(`Balance insuficiente. Tienes ${selectedToken.balance.toString()} unidades disponibles, pero intentas transferir ${transferData.amount}.`)
+        return
+      }
     }
 
     const result = await transfer(
@@ -302,9 +364,12 @@ function ProductsContent() {
                   value={newToken.name}
                   onChange={(e) => setNewToken({ ...newToken, name: e.target.value })}
                   className="input-field"
-                  placeholder="Ej: Laptop HP ProBook"
+                  placeholder="Ej: Paracetamol 500mg - Lote L2025-001"
                   required
                 />
+                <p className="text-xs text-surface-400 mt-1">
+                  Ejemplos: &quot;API: Ibuprofeno USP&quot;, &quot;BOM: Vacuna VCN-001&quot;, &quot;PT: Amoxicilina 500mg Lote-A1&quot;
+                </p>
               </div>
 
               <div>
@@ -315,7 +380,7 @@ function ProductsContent() {
                   value={newToken.totalSupply}
                   onChange={(e) => setNewToken({ ...newToken, totalSupply: e.target.value })}
                   className="input-field"
-                  placeholder="Ej: 1000"
+                  placeholder="Ej: 10000"
                   required
                 />
               </div>
@@ -325,27 +390,60 @@ function ProductsContent() {
                 <textarea
                   value={newToken.features}
                   onChange={(e) => setNewToken({ ...newToken, features: e.target.value })}
-                  className="input-field min-h-[100px]"
-                  placeholder='{"color": "negro", "peso": "1.5kg", "origen": "China"}'
+                  className={`input-field min-h-[120px] font-mono text-sm ${
+                    newToken.features.trim() && !validateFeaturesJson(newToken.features).isValid
+                      ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                      : ''
+                  }`}
+                  placeholder='{"schema_version": "1.0.0", "type": "API_MP", "labels": {"display_name": "Ibuprofeno USP"}, ...}'
                 />
+                {newToken.features.trim() && (
+                  <div className="mt-2">
+                    {validateFeaturesJson(newToken.features).isValid ? (
+                      <p className="text-sm text-green-600 flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        JSON válido
+                      </p>
+                    ) : (
+                      <div className="text-sm text-red-600">
+                        <p className="font-medium">Errores de validación:</p>
+                        <ul className="list-disc list-inside text-xs mt-1">
+                          {validateFeaturesJson(newToken.features).errors.map((err, i) => (
+                            <li key={i}>{err}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
                 <label className="label">Token Padre (opcional)</label>
-                <input
-                  type="number"
-                  min="0"
+                <select
                   value={newToken.parentId}
                   onChange={(e) => setNewToken({ ...newToken, parentId: e.target.value })}
-                  className="input-field"
-                  placeholder="0 = Sin padre"
-                />
+                  className="select-field"
+                >
+                  <option value="0">Sin padre (token raíz)</option>
+                  {tokens.map((token) => (
+                    <option key={token.id.toString()} value={token.id.toString()}>
+                      #{token.id.toString()} - {token.name}
+                    </option>
+                  ))}
+                </select>
                 <p className="text-sm text-surface-500 mt-1">
-                  Deja en 0 si este token no deriva de otro
+                  Selecciona un token padre si este deriva de otro (ej: PT deriva de BOM)
                 </p>
               </div>
 
-              <button type="submit" disabled={isLoading} className="btn-primary w-full">
+              <button 
+                type="submit" 
+                disabled={isLoading || (newToken.features.trim() !== '' && !validateFeaturesJson(newToken.features).isValid)} 
+                className="btn-primary w-full"
+              >
                 {isLoading ? 'Creando...' : 'Crear Token'}
               </button>
             </form>
@@ -371,64 +469,129 @@ function ProductsContent() {
               <p className="text-surface-600">No tienes tokens para transferir</p>
             </div>
           ) : (
-            <form onSubmit={handleTransfer} className="space-y-6">
-              <h2 className="text-xl font-semibold text-surface-800 mb-4">Transferir Token</h2>
-              
-              <div>
-                <label className="label">Token a Transferir</label>
-                <select
-                  value={transferData.tokenId}
-                  onChange={(e) => setTransferData({ ...transferData, tokenId: e.target.value })}
-                  className="select-field"
-                  required
-                >
-                  <option value="">Selecciona un token</option>
-                  {tokens.filter(t => t.balance > BigInt(0)).map((token) => (
-                    <option key={token.id.toString()} value={token.id.toString()}>
-                      #{token.id.toString()} - {token.name} (Balance: {token.balance.toString()})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <>
+              {/* Popup de error de balance */}
+              {balanceError && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                  <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-2xl">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      </div>
+                      <h3 className="text-lg font-semibold text-surface-800">Balance Insuficiente</h3>
+                    </div>
+                    <p className="text-surface-600 mb-6">{balanceError}</p>
+                    <button
+                      onClick={() => setBalanceError(null)}
+                      className="btn-primary w-full"
+                    >
+                      Corregir Cantidad
+                    </button>
+                  </div>
+                </div>
+              )}
 
-              <div>
-                <label className="label">Dirección del Destinatario</label>
-                <input
-                  type="text"
-                  value={transferData.to}
-                  onChange={(e) => setTransferData({ ...transferData, to: e.target.value })}
-                  className="input-field font-mono"
-                  placeholder="0x..."
-                  required
-                />
-                <p className="text-sm text-surface-500 mt-1">
-                  El destinatario debe estar registrado y aprobado
-                </p>
-              </div>
+              <form onSubmit={handleTransfer} className="space-y-6">
+                <h2 className="text-xl font-semibold text-surface-800 mb-4">Transferir Token</h2>
+                
+                <div>
+                  <label className="label">Token a Transferir</label>
+                  <select
+                    value={transferData.tokenId}
+                    onChange={(e) => {
+                      setTransferData({ ...transferData, tokenId: e.target.value })
+                      setBalanceError(null)
+                    }}
+                    className="select-field"
+                    required
+                  >
+                    <option value="">Selecciona un token</option>
+                    {tokens.filter(t => t.balance > BigInt(0)).map((token) => (
+                      <option key={token.id.toString()} value={token.id.toString()}>
+                        #{token.id.toString()} - {token.name} (Balance: {token.balance.toString()})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-              <div>
-                <label className="label">Cantidad</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={transferData.amount}
-                  onChange={(e) => setTransferData({ ...transferData, amount: e.target.value })}
-                  className="input-field"
-                  placeholder="Cantidad a transferir"
-                  required
-                />
-              </div>
+                <div>
+                  <label className="label">Cuenta Destinataria</label>
+                  {loadingRecipients ? (
+                    <div className="input-field flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                      <span className="text-sm text-surface-500">Cargando destinatarios...</span>
+                    </div>
+                  ) : availableRecipients.length === 0 ? (
+                    <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-200">
+                      <p className="text-sm text-yellow-800">
+                        No hay destinatarios disponibles para tu rol ({formatRole(user?.role || '')}).
+                        {getTargetRoleForTransfer(user?.role || '') && (
+                          <span className="block mt-1">
+                            Debes transferir a: <strong>{formatRole(getTargetRoleForTransfer(user?.role || '') || '')}</strong>
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={transferData.to}
+                        onChange={(e) => {
+                          setTransferData({ ...transferData, to: e.target.value })
+                          setBalanceError(null)
+                        }}
+                        className="select-field"
+                        required
+                      >
+                        <option value="">Selecciona un destinatario</option>
+                        {availableRecipients.map((recipient) => (
+                          <option key={recipient.userAddress} value={recipient.userAddress}>
+                            {recipient.userAddress} ({formatRole(recipient.role)})
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-sm text-surface-500 mt-1">
+                        {availableRecipients.length} destinatario{availableRecipients.length !== 1 ? 's' : ''} disponible{availableRecipients.length !== 1 ? 's' : ''} como {formatRole(getTargetRoleForTransfer(user?.role || '') || '')}
+                      </p>
+                    </>
+                  )}
+                </div>
 
-              <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
-                <p className="text-sm text-yellow-800">
-                  <strong>Nota:</strong> La transferencia quedará pendiente hasta que el destinatario la acepte.
-                </p>
-              </div>
+                <div>
+                  <label className="label">Cantidad</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={tokens.find(t => t.id.toString() === transferData.tokenId)?.balance.toString() || undefined}
+                    value={transferData.amount}
+                    onChange={(e) => {
+                      setTransferData({ ...transferData, amount: e.target.value })
+                      setBalanceError(null)
+                    }}
+                    className={`input-field ${balanceError ? 'border-red-300' : ''}`}
+                    placeholder="Cantidad a transferir"
+                    required
+                  />
+                  {transferData.tokenId && (
+                    <p className="text-sm text-surface-500 mt-1">
+                      Balance disponible: {tokens.find(t => t.id.toString() === transferData.tokenId)?.balance.toString() || '0'}
+                    </p>
+                  )}
+                </div>
 
-              <button type="submit" disabled={isLoading} className="btn-primary w-full">
-                {isLoading ? 'Enviando...' : 'Enviar Transferencia'}
-              </button>
-            </form>
+                <div className="bg-yellow-50 rounded-xl p-4 border border-yellow-200">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Nota:</strong> La transferencia quedará pendiente hasta que el destinatario la acepte.
+                  </p>
+                </div>
+
+                <button type="submit" disabled={isLoading} className="btn-primary w-full">
+                  {isLoading ? 'Enviando...' : 'Enviar Transferencia'}
+                </button>
+              </form>
+            </>
           )}
         </div>
       )}
