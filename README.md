@@ -56,6 +56,11 @@ supply-chain-tracker/
 │   │   │   └── pharma.ts            # Validaciones GS1 y regulatorias
 │   │   ├── builders/                # Constructores de features
 │   │   │   └── pharma.ts            # Builders por tipo de token
+│   │   ├── schemas/                 # Schemas JSON
+│   │   │   └── features.schema.json # Schema de validación de features
+│   │   └── lib/
+│   │       ├── errorHandler.ts       # Manejador de errores Web3/MetaMask
+│   │       └── schemaValidator.ts   # Validador de JSON schema
 │   │   ├── contexts/                # Contextos React
 │   │   │   └── Web3Context.tsx      # Provider Web3
 │   │   ├── hooks/                   # Custom hooks
@@ -171,8 +176,9 @@ Landing page con información del proyecto.
 
 #### 📦 Productos (`/products`)
 - Lista de tokens propios
-- Crear tokens (formulario simple)
-- Iniciar transferencias
+- Crear tokens (formulario simple con validación JSON)
+- **Transferir tokens con combobox de destinatarios filtrado por rol**
+- **Validación de balance con popup de error**
 
 #### ➕ Crear Token (`/tokens/create`)
 Wizard multi-paso para crear tokens farmacéuticos:
@@ -183,9 +189,13 @@ Wizard multi-paso para crear tokens farmacéuticos:
 
 #### 🔍 Trazabilidad (`/track`)
 Vista completa de un token:
-- **Información**: Detalles y características
-- **Jerarquía**: Árbol visual de tokens padre
-- **Transferencias**: Timeline cronológico
+- **Información**: Detalles y características con descripción de tipos
+- **Jerarquía**: 
+  - Árbol visual de tokens padre
+  - **Componentes BOM mostrados como nivel 0** (materias primas)
+  - **Tokens compliance como sub-nivel** (morado)
+- **Transferencias**: Timeline cronológico con perfil de cuentas
+- **Botón "Volver"** según historial de navegación
 
 #### ⚙️ Admin (`/admin`)
 Panel de administración:
@@ -226,14 +236,39 @@ Address: 0xeD252BAc2D88971cb5B393B0760f05AF27413b91
 
 Para pruebas, asegúrate de fondear esta cuenta y conectarla a MetaMask.
 
-## 📄 Validaciones GS1
+## 📄 Validaciones
 
+### Validaciones GS1
 El sistema implementa validaciones para códigos GS1:
 - **GTIN** (14 dígitos) - Global Trade Item Number
 - **GLN** (13 dígitos) - Global Location Number
 - **SSCC** (18 dígitos) - Serial Shipping Container Code
 
 Todas las validaciones incluyen verificación de dígito de control (Modulo 10).
+
+### Validación de Features JSON
+- **Schema validation**: Validación en tiempo real del JSON de features según `features.schema.json`
+- **Validación por tipo**: Reglas específicas según el tipo de token (API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG)
+- **Feedback visual**: Indicadores de validación en el formulario de creación
+
+## ✨ Mejoras Recientes (15 Diciembre, 2024)
+
+### Validaciones y UX
+- ✅ Validación JSON con schema al crear tokens
+- ✅ Validación de balance en transferencias con popup de error
+- ✅ Combobox de destinatarios filtrado por rol según cadena de suministro
+- ✅ Dashboard personalizado por perfil de usuario
+
+### Visualización
+- ✅ Componentes BOM mostrados como nivel 0 en jerarquía
+- ✅ Tokens compliance como sub-nivel en jerarquía
+- ✅ Botón "Volver" con historial de navegación
+- ✅ Descripción de tipos en JSON (ej: "API_MP (Materia Prima)")
+- ✅ Perfil de cuenta en transferencias
+
+### Formularios
+- ✅ ParentId como lista desplegable de tokens propios
+- ✅ Ejemplos de nombres acordes a medicamentos
 
 ## 🗂️ Documentación Adicional
 
@@ -247,4 +282,4 @@ MIT
 ---
 
 *Desarrollado con asistencia de Claude (Anthropic) en Cursor IDE*
-*Diciembre 2024*
+*Última actualización: 15 de Diciembre, 2024*

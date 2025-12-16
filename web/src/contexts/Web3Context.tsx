@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
 import { BrowserProvider, Contract, Signer } from 'ethers'
 import { SUPPLY_CHAIN_ABI, CONTRACT_ADDRESS, EXPECTED_CHAIN_ID, ANVIL_NETWORK_CONFIG } from '@/contracts/SupplyChain'
+import { parseTransactionError } from '@/lib/errorHandler'
 
 // Tipos para el contexto
 interface Web3ContextType {
@@ -116,16 +117,8 @@ export function Web3Provider({ children }: Web3ProviderProps) {
       await setupConnection(accounts[0])
 
     } catch (err) {
-      const metaMaskError = err as MetaMaskError
       console.error('❌ Error conectando wallet:', err)
-      
-      if (metaMaskError.code === -32002) {
-        setError('⚠️ Hay una solicitud pendiente en MetaMask. Abre la extensión y responde.')
-      } else if (metaMaskError.code === 4001) {
-        setError('Conexión cancelada por el usuario.')
-      } else {
-        setError(err instanceof Error ? err.message : 'Error al conectar')
-      }
+      setError(parseTransactionError(err))
     } finally {
       setIsLoading(false)
       isConnectingRef.current = false
@@ -182,12 +175,8 @@ export function Web3Provider({ children }: Web3ProviderProps) {
       }
       
       // Usuario canceló o error desconocido
-      if (err.code === 4001) {
-        setError('Cambio de red cancelado por el usuario')
-      } else {
-        console.error('❌ Error cambiando de red:', switchError)
-        setError('Error al cambiar de red')
-      }
+      console.error('❌ Error cambiando de red:', switchError)
+      setError(parseTransactionError(switchError))
       return false
     }
   }, [])

@@ -13,6 +13,10 @@ contract FundAccountsScript is Script {
     
     // Cuentas a financiar
     address constant ADMIN_ADDRESS = 0xeD252BAc2D88971cb5B393B0760f05AF27413b91;
+    address constant ACCOUNT_1 = 0xBc52603F93d9df628b2dAd74e588fE74FF2f6056;
+    address constant ACCOUNT_2 = 0x871fD3E66cCC4c21E3AC437D39266e72e6fD32A0;
+    address constant ACCOUNT_3 = 0x8816F96a8759Ff0410F5A67457DDe003950360a6;
+    address constant ACCOUNT_4 = 0x44ECBB8c87991Bbee768ef0C9e2731753a4B714b;
     
     // Cantidad a enviar (10 ETH)
     uint256 constant AMOUNT = 10 ether;
@@ -22,15 +26,28 @@ contract FundAccountsScript is Script {
         vm.startBroadcast(ANVIL_PRIVATE_KEY);
 
         // Enviar ETH al admin
-        (bool success1, ) = ADMIN_ADDRESS.call{value: AMOUNT}("");
-        require(success1, "Failed to fund admin");
-        console.log("Funded admin:", ADMIN_ADDRESS);
-        console.log("Amount:", AMOUNT / 1 ether, "ETH");
+        _fundAccount(ADMIN_ADDRESS, "admin");
+        
+        // Enviar ETH a las cuentas de prueba
+        _fundAccount(ACCOUNT_1, "account_1");
+        _fundAccount(ACCOUNT_2, "account_2");
+        _fundAccount(ACCOUNT_3, "account_3");
+        _fundAccount(ACCOUNT_4, "account_4");
+
+        console.log("========================================");
+        console.log("Todas las cuentas han sido financiadas con", AMOUNT / 1 ether, "ETH");
+        console.log("========================================");
 
         vm.stopBroadcast();
     }
+
+    function _fundAccount(address account, string memory name) internal {
+        (bool success, ) = account.call{value: AMOUNT}("");
+        require(success, string.concat("Failed to fund ", name));
+        console.log("Funded", name, ":", account);
+    }
     
-    // Función para financiar cualquier dirección
+    // Función para financiar cualquier dirección adicional
     function fundAddress(address target) public {
         vm.startBroadcast(ANVIL_PRIVATE_KEY);
         
@@ -42,4 +59,5 @@ contract FundAccountsScript is Script {
         vm.stopBroadcast();
     }
 }
+
 

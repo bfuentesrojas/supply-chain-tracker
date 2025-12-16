@@ -8,6 +8,17 @@ import { formatAddress, formatTimestamp } from '@/lib/web3Service'
 import Link from 'next/link'
 import { AccessGate } from '@/components/AccessGate'
 
+// Roles que pueden crear tokens
+const PRODUCER_ROLES = ['admin', 'manufacturer', 'distributor', 'retailer']
+// Rol de consumidor (solo puede ver y aprobar transferencias)
+const CONSUMER_ROLE = 'consumer'
+
+// Interfaz para transferencias con info de usuario
+interface TransferWithUserInfo extends Transfer {
+  fromUserRole?: string
+  toUserRole?: string
+}
+
 function DashboardContent() {
   const { isConnected, account, chainId } = useWeb3()
   const { 
@@ -29,10 +40,15 @@ function DashboardContent() {
   
   const [user, setUser] = useState<User | null>(null)
   const [tokens, setTokens] = useState<Token[]>([])
-  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [transfers, setTransfers] = useState<TransferWithUserInfo[]>([])
   const [stats, setStats] = useState({ totalTokens: 0, totalUsers: 0, totalTransfers: 0 })
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [activeProfileTab, setActiveProfileTab] = useState<'tokens' | 'received' | 'sent' | 'status'>('tokens')
+  
+  // Determinar el tipo de perfil
+  const isConsumer = user?.role.toLowerCase() === CONSUMER_ROLE
+  const canCreateTokens = user && PRODUCER_ROLES.includes(user.role.toLowerCase())
 
   const loadData = async () => {
     // Verificar red antes de cargar datos
@@ -72,12 +88,26 @@ function DashboardContent() {
       }
       setTokens(tokensData)
 
-      // Cargar transferencias del usuario
+      // Cargar transferencias del usuario con info de roles
       const transferIds = await getUserTransfers(account)
-      const transfersData: Transfer[] = []
+      const transfersData: TransferWithUserInfo[] = []
       for (const id of transferIds) {
         const transfer = await getTransfer(id)
-        if (transfer) transfersData.push(transfer)
+        if (transfer) {
+          // Obtener roles de from y to
+          let fromUserRole = ''
+          let toUserRole = ''
+          try {
+            const fromUser = await getUserInfo(transfer.from)
+            if (fromUser) fromUserRole = fromUser.role
+          } catch { /* Usuario no encontrado */ }
+          try {
+            const toUser = await getUserInfo(transfer.to)
+            if (toUser) toUserRole = toUser.role
+          } catch { /* Usuario no encontrado */ }
+          
+          transfersData.push({ ...transfer, fromUserRole, toUserRole })
+        }
       }
       setTransfers(transfersData)
 
@@ -117,16 +147,26 @@ function DashboardContent() {
   }
 
   const pendingTransfers = transfers.filter(t => t.status === TransferStatus.Pending && t.to.toLowerCase() === account?.toLowerCase())
+  const sentTransfers = transfers.filter(t => t.from.toLowerCase() === account?.toLowerCase())
+  const receivedTransfers = transfers.filter(t => t.to.toLowerCase() === account?.toLowerCase())
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-surface-800">Dashboard</h1>
-        {isAdmin && (
-          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-semibold">
-            Admin
-          </span>
-        )}
+        <h1 className="text-3xl font-bold text-surface-800">
+          {isAdmin ? 'Panel de Administración' : 'Mi Perfil'}
+        </h1>
+        <div className="flex items-center gap-2">
+          {user && (
+            <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+              isAdmin ? 'bg-purple-100 text-purple-800' : 
+              isConsumer ? 'bg-blue-100 text-blue-800' : 
+              'bg-green-100 text-green-800'
+            }`}>
+              {formatRole(user.role)}
+            </span>
+          )}
+        </div>
       </div>
 
       {actionError && (
@@ -401,9 +441,15 @@ function DashboardContent() {
                     <td className="py-3 px-4">#{t.tokenId.toString()}</td>
                     <td className="py-3 px-4 text-surface-600">
                       {t.from.toLowerCase() === account?.toLowerCase() ? (
-                        <span>→ {formatAddress(t.to, 4)}</span>
+                        <span>
+                          → {formatAddress(t.to, 4)}
+                          {t.toUserRole && <span className="text-xs text-surface-400 ml-1">({formatRole(t.toUserRole)})</span>}
+                        </span>
                       ) : (
-                        <span>← {formatAddress(t.from, 4)}</span>
+                        <span>
+                          ← {formatAddress(t.from, 4)}
+                          {t.fromUserRole && <span className="text-xs text-surface-400 ml-1">({formatRole(t.fromUserRole)})</span>}
+                        </span>
                       )}
                     </td>
                     <td className="py-3 px-4">{t.amount.toString()}</td>

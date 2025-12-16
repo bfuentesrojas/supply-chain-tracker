@@ -101,6 +101,8 @@
 
 ### Sesión 4: Sistema Pharma y Trazabilidad Completa (11 de Diciembre, 2024)
 
+### Sesión 5: Mejoras de UX y Validaciones (15 de Diciembre, 2024)
+
 #### Sistema de Tokens Farmacéuticos
 | Tarea | Tiempo Estimado |
 |-------|-----------------|
@@ -144,13 +146,31 @@
 | Actualización pie de página | 1 min |
 | **Total UI/UX** | **~5 minutos** |
 
+#### Mejoras de UX y Validaciones
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Validación JSON con schema (schemaValidator.ts) | 8 min |
+| Mejora jerarquía BOM (componentes nivel 0) | 6 min |
+| Botón volver en vista de token | 4 min |
+| Validación balance con popup | 5 min |
+| Dashboard por perfil (Admin/Fabricante/Consumidor) | 12 min |
+| Ejemplos de nombres acordes a medicamentos | 2 min |
+| ParentId como lista desplegable | 3 min |
+| Mostrar perfil en transferencias | 3 min |
+| Descripción de type en JSON | 2 min |
+| Tokens compliance como sub-nivel | 5 min |
+| Combobox de destinatarios filtrado por rol | 8 min |
+| Corrección errores Zod (validators/pharma.ts) | 3 min |
+| Build y verificación | 2 min |
+| **Total Sesión 5** | **~63 minutos** |
+
 ### Resumen Total del Proyecto
-| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Total |
-|------------|----------|----------|----------|----------|-------|
-| Smart Contracts | ~18 min | ~45 min | ~3 min | - | **~66 min** |
-| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | **~241 min** |
-| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | **~25 min** |
-| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~332 min (~5h 32min)** |
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Total |
+|------------|----------|----------|----------|----------|----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | **~66 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | **~304 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | **~30 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~400 min (~6h 40min)** |
 
 ---
 
@@ -254,12 +274,12 @@ cast send <address> --value 10ether --private-key <anvil-key>
 
 ### Métricas Finales del Chat
 
-| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Total |
-|---------|----------|----------|----------|----------|-------|
-| Prompts del usuario | 2 | 4 | 3 | ~20 | ~29 |
-| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 50+ |
-| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~9,900 |
-| Tests implementados | 24 | 50 | 50 | 50 | 50 (final) |
+| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Total |
+|---------|----------|----------|----------|----------|----------|-------|
+| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~41 |
+| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 60+ |
+| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~11,100 |
+| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 (final) |
 
 ---
 
@@ -293,10 +313,28 @@ Tipos de tokens implementados:
    - CAPA (acciones correctivas/preventivas)
    - Recall (retiro de producto)
 
+### Validaciones y Mejoras UX (Sesión 5)
+- **Validación JSON con schema**: Validación en tiempo real del JSON de features según `features.schema.json`
+- **Dashboard por perfil**:
+  - Admin: Panel completo sin cambios
+  - Fabricante/Distribuidor/Minorista: Pestañas "Mis Tokens", "Recibidas", "Enviadas", "Mi Estado"
+  - Consumidor: Pestañas "Mis Tokens", "Recibidas", "Mi Estado" (sin crear tokens)
+- **Transferencias mejoradas**:
+  - Combobox de destinatarios filtrado por rol según cadena de suministro
+  - Validación de balance con popup de error
+  - Muestra perfil del destinatario entre paréntesis
+- **Mejoras en creación de tokens**:
+  - Ejemplos acordes a medicamentos
+  - ParentId como lista desplegable de tokens propios
+
 ### Características de Trazabilidad
 - Vista de jerarquía completa (árbol visual)
+- **Componentes BOM mostrados como nivel 0** (materias primas sobre el BOM)
+- **Tokens compliance como sub-nivel** en la jerarquía
 - Timeline de transferencias cronológico
 - Detección automática de Token IDs en features (links navegables)
+- **Botón "Volver"** según historial de navegación
+- **Descripción de tipos** en JSON (ej: "API_MP (Materia Prima)")
 - Filtros por estado en transferencias
 
 ---
@@ -328,6 +366,11 @@ supply-chain-tracker/
 │   │   ├── types/pharma.ts          # Tipos TypeScript pharma
 │   │   ├── validators/pharma.ts     # Validadores Zod
 │   │   ├── builders/pharma.ts       # Constructores de features
+│   │   ├── schemas/                 # Schemas JSON
+│   │   │   └── features.schema.json # Schema de validación de features
+│   │   └── lib/
+│   │       ├── errorHandler.ts       # Manejador de errores Web3
+│   │       └── schemaValidator.ts   # Validador de JSON schema
 │   │   ├── hooks/useSupplyChain.ts  # Hook del contrato
 │   │   └── contexts/Web3Context.tsx # Contexto Web3
 ├── chats/                           # Logs de sesiones IA
@@ -377,5 +420,26 @@ supply-chain-tracker/
 
 ---
 
+## 2.8. Mejoras Implementadas (Sesión 5 - 15 Diciembre, 2024)
+
+### Validaciones
+1. **Validación JSON con schema**: Implementado `schemaValidator.ts` que valida el JSON de features según `features.schema.json` antes de crear tokens
+2. **Validación de balance**: Popup modal cuando se intenta transferir más de lo disponible
+
+### Mejoras de UX
+1. **Dashboard por perfil**: Diferentes vistas según rol (Admin/Fabricante-Distribuidor-Minorista/Consumidor)
+2. **Combobox de destinatarios**: Filtrado automático por rol según cadena de suministro (Fabricante→Distribuidor, Distribuidor→Minorista, Minorista→Consumidor)
+3. **Botón volver**: Historial de navegación en vista de token
+4. **ParentId como lista**: Selector desplegable en lugar de input numérico
+5. **Ejemplos mejorados**: Nombres de tokens acordes a medicamentos
+
+### Mejoras Visuales
+1. **Jerarquía BOM**: Componentes del BOM mostrados como nivel 0 (verde) sobre el BOM
+2. **Tokens compliance**: Mostrados como sub-nivel (morado) en la jerarquía
+3. **Descripción de tipos**: Formato "API_MP (Materia Prima)" en JSON
+4. **Perfil en transferencias**: Muestra rol entre paréntesis junto a dirección
+
+---
+
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
-*Última actualización: 11 de Diciembre, 2024*
+*Última actualización: 15 de Diciembre, 2024*

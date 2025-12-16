@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/features.schema.json",
+  "title": "SupplyChain Token Features",
+  "description": "Esquema de validación para el campo 'features' de los tokens del MVP farmacéutico.",
+  "type": "object",
+
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Versión del esquema de features."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["API_MP", "BOM", "PT_LOTE", "SSCC", "COMPLIANCE_LOG"],
+      "description": "Tipo de token representado en features."
+    },
+    "labels": {
+      "type": "object",
+      "description": "Etiquetas de visualización.",
+      "properties": {
+        "display_name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" }
+      },
+      "required": ["display_name"],
+      "additionalProperties": false
+    },
+    "gs1": {
+      "type": "object",
+      "description": "Identificadores GS1 (GTIN, AI-10 lote, AI-17 vencimiento, AI-21 serie, SSCC).",
+      "properties": {
+        "gtin": {
+          "type": "string",
+          "pattern": "^[0-9]{8,14}$",
+          "description": "GTIN (8-14 dígitos)."
+        },
+        "ai_10_lote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "AI-10: identificador de lote."
+        },
+        "ai_17_vencimiento": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "AI-17: fecha de vencimiento en formato YYYY-MM-DD."
+        },
+        "ai_21_serie": {
+          "type": "string",
+          "minLength": 1,
+          "description": "AI-21: número de serie (opcional)."
+        },
+        "sscc": {
+          "type": "string",
+          "pattern": "^[0-9]{18}$",
+          "description": "SSCC (18 dígitos)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "isp": {
+      "type": "object",
+      "description": "Metadatos regulatorios del ISP.",
+      "properties": {
+        "registro_sanitario": { "type": "string", "minLength": 1 },
+        "referencias": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "quality": {
+      "type": "object",
+      "description": "Referencias de calidad (BPM, BPA-D, farmacovigilancia).",
+      "properties": {
+        "bpm_refs": { "type": "array", "items": { "type": "string" } },
+        "bpa_refs": { "type": "array", "items": { "type": "string" } },
+        "farmacovigilancia_refs": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "cold_chain": {
+      "type": "object",
+      "description": "Configuración de cadena de frío.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "target_range": { "type": "string", "description": "Ej.: '2-8C', '15-25C'." },
+        "notes": { "type": "string" }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "parents": {
+      "type": "object",
+      "description": "Estrategia de asociación padre y lista de componentes (BOM/PT).",
+      "properties": {
+        "linking_strategy": {
+          "type": "string",
+          "enum": ["single_parent", "bom_parent"]
+        },
+        "primary_parent_id": { "type": "integer", "minimum": 0 },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tokenId": { "type": "integer", "minimum": 0 },
+              "qty": { "type": "number", "exclusiveMinimum": 0 },
+              "uom": { "type": "string", "minLength": 1 },
+              "role": { "type": "string", "enum": ["API", "Excipient", "Other"] }
+            },
+            "required": ["tokenId", "qty", "uom"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["linking_strategy", "primary_parent_id"],
+      "additionalProperties": false
+    },
+    "contents": {
+      "type": "array",
+      "description": "Contenido de la unidad logística (SSCC).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tokenId": { "type": "integer", "minimum": 1 },
+          "qty": { "type": "number", "exclusiveMinimum": 0 },
+          "uom": { "type": "string", "minLength": 1 }
+        },
+        "required": ["tokenId", "qty", "uom"],
+        "additionalProperties": false
+      }
+    },
+    "documents": {
+      "type": "array",
+      "description": "Documentos asociados (hash/uri).",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "hash": { "type": "string" },
+          "uri": { "type": "string" }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    "uom": {
+      "type": "string",
+      "description": "Unidad de medida principal del token (kg, L, units, etc.)."
+    },
+    "regulatory_notes": { "type": "string" },
+    "custom": {
+      "type": "object",
+      "description": "Campos personalizados según el tipo de token.",
+      "additionalProperties": true
+    }
+  },
+
+  "required": ["schema_version", "type", "labels"],
+  "additionalProperties": false,
+
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "API_MP" } } },
+      "then": {
+        "required": ["gs1", "uom"],
+        "properties": {
+          "gs1": {
+            "required": ["ai_10_lote"],
+            "properties": {
+              "ai_17_vencimiento": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+              }
+            }
+          },
+          "cold_chain": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "BOM" } } },
+      "then": {
+        "required": ["parents"],
+        "properties": {
+          "parents": {
+            "properties": {
+              "linking_strategy": { "const": "single_parent" },
+              "components": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          },
+          "documents": { "type": "array" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "PT_LOTE" } } },
+      "then": {
+        "required": ["gs1", "isp", "uom", "parents"],
+        "properties": {
+          "gs1": {
+            "required": ["gtin", "ai_10_lote", "ai_17_vencimiento"]
+          },
+          "isp": {
+            "required": ["registro_sanitario"]
+          },
+          "parents": {
+            "properties": {
+              "linking_strategy": { "const": "bom_parent" },
+              "primary_parent_id": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "cold_chain": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "SSCC" } } },
+      "then": {
+        "required": ["gs1", "contents", "parents"],
+        "properties": {
+          "gs1": { "required": ["sscc"] },
+          "contents": { "type": "array", "minItems": 1 },
+          "parents": {
+            "properties": {
+              "linking_strategy": { "const": "single_parent" },
+              "primary_parent_id": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "cold_chain": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "COMPLIANCE_LOG" } } },
+      "then": {
+        "required": ["documents", "parents"],
+        "properties": {
+          "documents": { "type": "array", "minItems": 1 },
+          "parents": {
+            "properties": {
+              "linking_strategy": { "const": "single_parent" },
+              "primary_parent_id": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "custom": {
+            "type": "object",
+            "properties": {
+              "kind": { "type": "string", "enum": ["TempLog", "CAPA", "Recall"] }
+            },
+            "required": ["kind"]
+          }
+        }
+      }
+    }
+  ],
+
+  "examples": [
+    {
+      "schema_version": "1.0.0",
+      "type": "API_MP",
+      "labels": { "display_name": "API Acetato - API-777" },
+      "gs1": { "ai_10_lote": "API-777", "ai_17_vencimiento": "2027-12-31" },
+      "quality": { "bpm_refs": ["NT127/159"] },
+      "cold_chain": { "enabled": true, "target_range": "2-8C" },
+      "parents": { "linking_strategy": "single_parent", "primary_parent_id": 0 },
+      "uom": "L",
+      "documents": [{ "name": "CoA", "hash": "0x...", "uri": "ipfs://..." }]
+    },
+    {
+      "schema_version": "1.0.0",
+      "type": "BOM",
+      "labels": { "display_name": "BOM VCN-001" },
+      "quality": { "bpm_refs": ["NT127/159"] },
+      "cold_chain": { "enabled": true, "target_range": "2-8C" },
+      "parents": {
+        "linking_strategy": "single_parent",
+        "primary_parent_id": 0,
+        "components": [
+          { "tokenId": 101, "qty": 50, "uom": "L", "role": "API" },
+          { "tokenId": 102, "qty": 10, "uom": "kg", "role": "Excipient" }
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "type": "PT_LOTE",
+      "labels": { "display_name": "Vacuna VCN-001 - Lote L-2025-01" },
+      "gs1": {
+        "gtin": "07612345678901",
+        "ai_10_lote": "L-2025-01",
+        "ai_17_vencimiento": "2026-06-30",
+        "ai_21_serie": "SER-00001"
+      },
+      "isp": { "registro_sanitario": "F-12345" },
+      "quality": { "bpm_refs": ["NT127/159"], "bpa_refs": ["NT147"], "farmacovigilancia_refs": ["NT140"] },
+      "cold_chain": { "enabled": true, "target_range": "2-8C" },
+      "parents": { "linking_strategy": "bom_parent", "primary_parent_id": 200 },
+      "uom": "units",
+      "documents": [{ "name": "Liberación QF", "hash": "0x...", "uri": "ipfs://..." }]
+    },
+    {
+      "schema_version": "1.0.0",
+      "type": "SSCC",
+      "labels": { "display_name": "SSCC 000123456789012345" },
+      "gs1": { "sscc": "000123456789012345" },
+      "quality": { "bpa_refs": ["NT147"] },
+      "cold_chain": { "enabled": true, "target_range": "2-8C" },
+      "parents": { "linking_strategy": "single_parent", "primary_parent_id": 1001 },
+      "contents": [{ "tokenId": 1001, "qty": 1000, "uom": "units" }],
+      "documents": [{ "name": "Packing List" }]
+    },
+    {
+      "schema_version": "1.0.0",
+      "type": "COMPLIANCE_LOG",
+      "labels": { "display_name": "TempLog #0001" },
+      "quality": { "bpa_refs": ["NT147"] },
+      "cold_chain": { "enabled": true, "target_range": "2-8C" },
+      "parents": { "linking_strategy": "single_parent", "primary_parent_id": 50001 },
+      "documents": [{ "name": "DataLogger CSV", "hash": "0x...", "uri": "ipfs://..." }],
+      "custom": { "kind": "TempLog", "summary": { "min": "2.1C", "max": "7.8C", "excursions": 1 } }
+    }
+  ]
+}
+

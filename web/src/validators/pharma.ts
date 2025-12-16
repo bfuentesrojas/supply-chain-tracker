@@ -102,19 +102,23 @@ const manufacturerInfoSchema = z.object({
 const unitOfMeasureSchema = z.nativeEnum(UnitOfMeasure)
 const storageConditionSchema = z.nativeEnum(StorageCondition)
 
-const storageSchema = z.object({
+const storageSchemaBase = z.object({
   condition: storageConditionSchema,
   minTemp: z.number().optional(),
   maxTemp: z.number().optional(),
   humidity: z.string().optional(),
   lightSensitive: z.boolean().optional()
-}).refine(
-  (data) => {
-    if (data.minTemp !== undefined && data.maxTemp !== undefined) {
-      return data.minTemp <= data.maxTemp
-    }
-    return true
-  },
+})
+
+const storageRefinement = (data: { minTemp?: number; maxTemp?: number }) => {
+  if (data.minTemp !== undefined && data.maxTemp !== undefined) {
+    return data.minTemp <= data.maxTemp
+  }
+  return true
+}
+
+const storageSchema = storageSchemaBase.refine(
+  storageRefinement,
   'Temperatura mínima debe ser menor o igual a temperatura máxima'
 )
 
@@ -183,9 +187,9 @@ export const ptLoteFeaturesSchema = z.object({
     strength: z.string().min(1, 'Concentración requerida'),
     presentation: z.string().min(1, 'Presentación requerida')
   }),
-  storage: storageSchema.extend({
+  storage: storageSchemaBase.extend({
     shelfLife: z.number().int().positive().optional()
-  }),
+  }).refine(storageRefinement, 'Temperatura mínima debe ser menor o igual a temperatura máxima'),
   regulatory: z.object({
     ispRegistration: z.string().min(1, 'Registro ISP requerido'),
     atcCode: z.string().regex(/^[A-Z]\d{2}[A-Z]{2}\d{2}$/, 'Formato ATC inválido').optional(),
@@ -330,13 +334,15 @@ export const complianceLogFeaturesSchema = z.discriminatedUnion('logType', [
   recallFeaturesSchema
 ])
 
-/** Schema union para todas las features */
-export const tokenFeaturesSchema = z.discriminatedUnion('type', [
+/** Schema union para todas las features 
+ * Usando z.union en lugar de discriminatedUnion porque algunos schemas usan .refine()
+ */
+export const tokenFeaturesSchema = z.union([
   apiMpFeaturesSchema,
   bomFeaturesSchema,
   ptLoteFeaturesSchema,
   ssccFeaturesSchema,
-  // Para COMPLIANCE_LOG usamos refinement
+  // Para COMPLIANCE_LOG
   z.object({
     type: z.literal(TokenType.COMPLIANCE_LOG),
     logType: z.nativeEnum(ComplianceLogType)
@@ -460,3 +466,4 @@ export function generateSSCCCheckDigit(sscc17: string): string {
   const checkDigit = (10 - (sum % 10)) % 10
   return sscc17 + checkDigit
 }
+
