@@ -54,6 +54,15 @@ export function Navbar() {
   }
 
   const isApproved = user?.status === UserStatus.Approved
+  const isConsumer = user?.role.toLowerCase() === 'consumer' || user?.role.toLowerCase() === 'consumidor'
+  const canCreateTokens = user && !isConsumer && (user.role.toLowerCase() === 'admin' || 
+    user.role.toLowerCase() === 'administrador' ||
+    user.role.toLowerCase() === 'manufacturer' || 
+    user.role.toLowerCase() === 'fabricante' ||
+    user.role.toLowerCase() === 'distributor' || 
+    user.role.toLowerCase() === 'distribuidor' ||
+    user.role.toLowerCase() === 'retailer' || 
+    user.role.toLowerCase() === 'minorista')
 
   return (
     <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-surface-200">
@@ -79,12 +88,16 @@ export function Navbar() {
                 <Link href="/dashboard" className="text-surface-600 hover:text-primary-600 transition-colors font-medium">
                   Dashboard
                 </Link>
-                <Link href="/products" className="text-surface-600 hover:text-primary-600 transition-colors font-medium">
-                  Tokens
-                </Link>
-                <Link href="/tokens/create" className="text-accent-600 hover:text-accent-700 transition-colors font-medium">
-                  + Crear
-                </Link>
+                {!isConsumer && (
+                  <Link href="/products" className="text-surface-600 hover:text-primary-600 transition-colors font-medium">
+                    Tokens
+                  </Link>
+                )}
+                {canCreateTokens && (
+                  <Link href="/tokens/create" className="text-accent-600 hover:text-accent-700 transition-colors font-medium">
+                    + Crear
+                  </Link>
+                )}
                 <Link href="/track" className="text-surface-600 hover:text-primary-600 transition-colors font-medium">
                   Buscar
                 </Link>
@@ -178,20 +191,24 @@ export function Navbar() {
                   >
                     Dashboard
                   </Link>
-                  <Link
-                    href="/products"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="px-4 py-2 text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
-                  >
-                    Tokens
-                  </Link>
-                  <Link
-                    href="/tokens/create"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="px-4 py-2 text-accent-600 hover:bg-accent-50 rounded-lg transition-colors font-medium"
-                  >
-                    + Crear Token
-                  </Link>
+                  {!isConsumer && (
+                    <Link
+                      href="/products"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="px-4 py-2 text-surface-600 hover:bg-surface-100 rounded-lg transition-colors"
+                    >
+                      Tokens
+                    </Link>
+                  )}
+                  {canCreateTokens && (
+                    <Link
+                      href="/tokens/create"
+                      onClick={() => setIsMenuOpen(false)}
+                      className="px-4 py-2 text-accent-600 hover:bg-accent-50 rounded-lg transition-colors font-medium"
+                    >
+                      + Crear Token
+                    </Link>
+                  )}
                   <Link
                     href="/track"
                     onClick={() => setIsMenuOpen(false)}

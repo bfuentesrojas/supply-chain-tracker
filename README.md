@@ -149,11 +149,11 @@ Abrir http://localhost:3000
 ### Roles de Usuario
 | Rol | Descripción | Permisos |
 |-----|-------------|----------|
-| 🏭 Fabricante | Produce productos | Crear tokens, transferir |
-| 🚚 Distribuidor | Transporta productos | Recibir, transferir |
-| 🏪 Minorista | Vende al consumidor | Recibir, transferir |
-| 👤 Consumidor | Usuario final | Recibir, verificar |
-| 👑 Admin | Administrador | Aprobar usuarios |
+| 🏭 Fabricante | Produce productos | Crear tokens, transferir a distribuidores |
+| 🚚 Distribuidor | Transporta productos | Recibir, transferir a minoristas |
+| 🏪 Minorista | Vende al consumidor | Recibir, transferir a consumidores |
+| 👤 Consumidor | Usuario final | Recibir tokens, verificar trazabilidad (sin crear ni transferir) |
+| 👑 Admin | Administrador | Aprobar usuarios, transferir a cualquier rol |
 
 ### Tipos de Token Pharma
 | Tipo | Descripción | Ejemplo |
@@ -170,15 +170,19 @@ Abrir http://localhost:3000
 Landing page con información del proyecto.
 
 #### 📊 Dashboard (`/dashboard`)
-- Estadísticas generales
+- **Totalizadores personalizados por rol**:
+  - **Admin**: Total Tokens, Total Usuarios, Total Transferencias, Mi Estado
+  - **Fabricante/Distribuidor/Retailer**: Mis Tokens, Transferencias Enviadas, Transferencias Recibidas, Mi Estado
+  - **Consumidor**: Mis Tokens, Transferencias Recibidas, Mi Estado
 - Tokens del usuario
 - Transferencias pendientes
 
 #### 📦 Productos (`/products`)
 - Lista de tokens propios
-- Crear tokens (formulario simple con validación JSON)
-- **Transferir tokens con combobox de destinatarios filtrado por rol**
+- Crear tokens (formulario simple con validación JSON obligatoria)
+- **Transferir tokens con combobox de destinatarios filtrado por rol según cadena de suministro**
 - **Validación de balance con popup de error**
+- **Restricciones por rol**: Consumidores solo pueden ver sus tokens (sin crear ni transferir)
 
 #### ➕ Crear Token (`/tokens/create`)
 Wizard multi-paso para crear tokens farmacéuticos:
@@ -192,7 +196,7 @@ Vista completa de un token:
 - **Información**: Detalles y características con descripción de tipos
 - **Jerarquía**: 
   - Árbol visual de tokens padre
-  - **Componentes BOM mostrados como nivel 0** (materias primas)
+  - **Componentes BOM mostrados como sub-nivel bajo cada BOM** (materias primas)
   - **Tokens compliance como sub-nivel** (morado)
 - **Transferencias**: Timeline cronológico con perfil de cuentas
 - **Botón "Volver"** según historial de navegación
@@ -251,24 +255,35 @@ Todas las validaciones incluyen verificación de dígito de control (Modulo 10).
 - **Validación por tipo**: Reglas específicas según el tipo de token (API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG)
 - **Feedback visual**: Indicadores de validación en el formulario de creación
 
-## ✨ Mejoras Recientes (15 Diciembre, 2024)
+## ✨ Mejoras Recientes (Diciembre 2024)
 
 ### Validaciones y UX
-- ✅ Validación JSON con schema al crear tokens
+- ✅ **Validación JSON obligatoria** al crear tokens (campo requerido con validación completa)
 - ✅ Validación de balance en transferencias con popup de error
-- ✅ Combobox de destinatarios filtrado por rol según cadena de suministro
-- ✅ Dashboard personalizado por perfil de usuario
+- ✅ **Combobox de destinatarios filtrado por rol según cadena de suministro**:
+  - Admin: Todos los usuarios aprobados (excluyendo su cuenta)
+  - Fabricante: Solo distribuidores
+  - Distribuidor: Solo minoristas
+  - Minorista: Solo consumidores
+- ✅ **Dashboard personalizado por rol** con totalizadores específicos
+- ✅ **Restricciones para consumidores**: Sin acceso a crear tokens ni transferir
 
 ### Visualización
-- ✅ Componentes BOM mostrados como nivel 0 en jerarquía
+- ✅ **Componentes BOM mostrados como sub-nivel bajo cada BOM** en jerarquía
 - ✅ Tokens compliance como sub-nivel en jerarquía
 - ✅ Botón "Volver" con historial de navegación
 - ✅ Descripción de tipos en JSON (ej: "API_MP (Materia Prima)")
 - ✅ Perfil de cuenta en transferencias
+- ✅ Formato de destinatarios: `#número (rol)` en lugar de dirección
 
 ### Formularios
 - ✅ ParentId como lista desplegable de tokens propios
 - ✅ Ejemplos de nombres acordes a medicamentos
+- ✅ Validación en tiempo real del JSON de features
+
+### Correcciones Técnicas
+- ✅ Corrección de comparación de estado de usuario en `getUsersByRole`
+- ✅ Corrección de estructura JSON de BOM para visualización correcta de componentes
 
 ## 🗂️ Documentación Adicional
 
@@ -282,4 +297,4 @@ MIT
 ---
 
 *Desarrollado con asistencia de Claude (Anthropic) en Cursor IDE*
-*Última actualización: 15 de Diciembre, 2024*
+*Última actualización: Diciembre 2024*

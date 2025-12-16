@@ -164,6 +164,28 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
 
   const handleCreateToken = async () => {
     clearError()
+    
+    // Validar que el JSON de features esté presente y sea válido
+    if (!featuresJson || featuresJson.trim() === '') {
+      setValidationErrors(['El JSON de features es obligatorio. Por favor, completa el formulario para generar el JSON.'])
+      return
+    }
+    
+    // Validar que sea un JSON válido
+    try {
+      JSON.parse(featuresJson)
+    } catch (err) {
+      setValidationErrors(['El JSON de features no es válido. Por favor, revisa el formato.'])
+      return
+    }
+    
+    // Validar que tenga los campos mínimos requeridos
+    const parsed = JSON.parse(featuresJson)
+    if (!parsed.type || !parsed.labels || !parsed.labels.display_name) {
+      setValidationErrors(['El JSON de features debe incluir: type, labels.display_name'])
+      return
+    }
+    
     const success = await createToken(
       tokenName,
       BigInt(totalSupply),
@@ -385,11 +407,26 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
 
             <div className="p-4 bg-surface-50 rounded-xl">
               <p className="text-sm text-surface-500 mb-2">Features JSON</p>
-              <div className="bg-surface-800 rounded-lg p-4 overflow-x-auto">
-                <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">
-                  {JSON.stringify(JSON.parse(featuresJson), null, 2)}
-                </pre>
-              </div>
+              {!featuresJson || featuresJson.trim() === '' ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <p className="text-red-800 font-semibold">⚠️ JSON de features faltante</p>
+                  <p className="text-red-600 text-sm mt-1">
+                    Debes completar el formulario para generar el JSON de features antes de crear el token.
+                  </p>
+                </div>
+              ) : (
+                <div className="bg-surface-800 rounded-lg p-4 overflow-x-auto">
+                  <pre className="text-green-400 text-sm font-mono whitespace-pre-wrap">
+                    {(() => {
+                      try {
+                        return JSON.stringify(JSON.parse(featuresJson), null, 2)
+                      } catch (err) {
+                        return `Error al parsear JSON: ${err instanceof Error ? err.message : String(err)}`
+                      }
+                    })()}
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
 
@@ -408,14 +445,16 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
             </button>
             <button
               onClick={handleCreateToken}
-              disabled={isLoading}
-              className="btn-primary flex-1"
+              disabled={isLoading || !featuresJson || featuresJson.trim() === ''}
+              className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <>
                   <span className="animate-spin mr-2">⏳</span>
                   Creando...
                 </>
+              ) : !featuresJson || featuresJson.trim() === '' ? (
+                '⚠️ Completa el formulario primero'
               ) : (
                 '✓ Crear Token en Blockchain'
               )}

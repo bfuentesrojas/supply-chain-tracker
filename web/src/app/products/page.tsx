@@ -24,6 +24,8 @@ function ProductsContent() {
     createToken, 
     transfer,
     getUsersByRole,
+    getUserById,
+    getTotalUsers,
     isLoading, 
     error, 
     clearError 
@@ -37,6 +39,9 @@ function ProductsContent() {
   const [activeTab, setActiveTab] = useState<'list' | 'create' | 'transfer'>('list')
   const [success, setSuccess] = useState<string | null>(null)
   const [balanceError, setBalanceError] = useState<string | null>(null)
+  
+  // Determinar si el usuario es consumidor
+  const isConsumer = user?.role.toLowerCase() === 'consumer' || user?.role.toLowerCase() === 'consumidor'
 
   // Form states
   const [newToken, setNewToken] = useState({
@@ -55,7 +60,9 @@ function ProductsContent() {
   // Determinar rol de destinatario según cadena de suministro
   const getTargetRoleForTransfer = (userRole: string): string | null => {
     const roleLower = userRole.toLowerCase()
-    if (roleLower === 'manufacturer' || roleLower === 'fabricante') {
+    if (roleLower === 'admin' || roleLower === 'administrador') {
+      return null // Admin puede transferir a todos
+    } else if (roleLower === 'manufacturer' || roleLower === 'fabricante') {
       return 'distributor' // Distribuidor
     } else if (roleLower === 'distributor' || roleLower === 'distribuidor') {
       return 'retailer' // Minorista
@@ -65,6 +72,94 @@ function ProductsContent() {
     return null
   }
 
+  // Obtener todos los usuarios aprobados (para admin)
+  const getAllApprovedUsers = async (excludeAddress?: string): Promise<User[]> => {
+    if (!getTotalUsers) return []
+    
+    try {
+      const total = await getTotalUsers()
+      const totalNum = Number(total)
+      
+      console.log('[DEBUG] getAllApprovedUsers:', {
+        totalUsers: totalNum,
+        excludeAddress
+      })
+      
+      if (totalNum === 0) return []
+
+      const usersData: User[] = []
+      
+      for (let i = BigInt(1); i <= totalNum; i++) {
+        try {
+          const user = await getUserById(i)
+          if (user && user.id > BigInt(0)) {
+            console.log('[DEBUG] getAllApprovedUsers - checking user:', {
+              id: user.id.toString(),
+              address: user.userAddress,
+              role: user.role,
+              status: user.status,
+              isApproved: user.status === UserStatus.Approved,
+              shouldExclude: excludeAddress && user.userAddress.toLowerCase() === excludeAddress.toLowerCase()
+            })
+            
+            if (user.status === UserStatus.Approved) {
+              // Excluir la cuenta actual si se proporciona
+              if (!excludeAddress || user.userAddress.toLowerCase() !== excludeAddress.toLowerCase()) {
+                usersData.push(user)
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`[DEBUG] Error obteniendo usuario ${i}:`, err)
+          // Continuar si hay error en un usuario
+        }
+      }
+
+      console.log('[DEBUG] getAllApprovedUsers result:', {
+        count: usersData.length,
+        users: usersData.map(u => ({ id: u.id.toString(), address: u.userAddress, role: u.role, status: u.status }))
+      })
+
+      return usersData
+    } catch (err) {
+      console.error('Error obteniendo todos los usuarios:', err)
+      return []
+    }
+  }
+
+  // Función de depuración: obtener todos los usuarios sin filtrar
+  const debugGetAllUsers = async () => {
+    if (!getTotalUsers || !getUserById) return []
+    
+    try {
+      const total = await getTotalUsers()
+      const totalNum = Number(total)
+      
+      const allUsers: Array<{ id: string, address: string, role: string, status: number }> = []
+      
+      for (let i = BigInt(1); i <= totalNum; i++) {
+        try {
+          const user = await getUserById(i)
+          if (user && user.id > BigInt(0)) {
+            allUsers.push({
+              id: user.id.toString(),
+              address: user.userAddress,
+              role: user.role,
+              status: user.status
+            })
+          }
+        } catch (err) {
+          // Continuar si hay error
+        }
+      }
+      
+      return allUsers
+    } catch (err) {
+      console.error('Error en debugGetAllUsers:', err)
+      return []
+    }
+  }
+
   // Cargar destinatarios disponibles según el rol del usuario
   const loadRecipients = async () => {
     if (!user || !isConnected) {
@@ -72,15 +167,53 @@ function ProductsContent() {
       return
     }
 
-    const targetRole = getTargetRoleForTransfer(user.role)
-    if (!targetRole) {
-      setAvailableRecipients([])
-      return
-    }
-
+    const roleLower = user.role.toLowerCase()
+    
     setLoadingRecipients(true)
     try {
-      const recipients = await getUsersByRole(targetRole)
+      // Debug: mostrar todos los usuarios
+      const allUsers = await debugGetAllUsers()
+      console.log('[DEBUG] ALL USERS IN SYSTEM:', allUsers)
+      
+      let recipients: User[] = []
+      
+      // Si es admin, obtener todos los usuarios aprobados (excluyendo la cuenta actual)
+      if (roleLower === 'admin' || roleLower === 'administrador') {
+        console.log('[DEBUG] loadRecipients: Admin user, loading all approved users')
+        recipients = await getAllApprovedUsers(account || undefined)
+        console.log('[DEBUG] loadRecipients: Admin recipients loaded', {
+          count: recipients.length,
+          recipients: recipients.map(r => ({ id: r.id.toString(), address: r.userAddress, role: r.role }))
+        })
+      } else {
+        // Para otros roles, obtener solo el rol específico
+        const targetRole = getTargetRoleForTransfer(user.role)
+        console.log('[DEBUG] loadRecipients: Non-admin user', {
+          userRole: user.role,
+          roleLower,
+          targetRole,
+          account,
+          userStatus: user.status,
+          isApproved: user.status === UserStatus.Approved
+        })
+        if (targetRole) {
+          console.log('[DEBUG] loadRecipients: Calling getUsersByRole with targetRole:', targetRole)
+          recipients = await getUsersByRole(targetRole)
+          console.log('[DEBUG] loadRecipients: getUsersByRole result:', {
+            targetRole,
+            recipientsCount: recipients.length,
+            recipients: recipients.map(r => ({ 
+              id: r.id.toString(), 
+              address: r.userAddress, 
+              role: r.role,
+              status: r.status 
+            }))
+          })
+        } else {
+          console.log('[DEBUG] loadRecipients: No targetRole found for role:', user.role)
+        }
+      }
+      
       setAvailableRecipients(recipients)
     } catch (err) {
       console.error('Error cargando destinatarios:', err)
@@ -131,11 +264,46 @@ function ProductsContent() {
   useEffect(() => {
     loadData()
   }, [isConnected, account])
+  
+  // Si el usuario es consumidor y está en una pestaña no permitida, redirigir a 'list'
+  useEffect(() => {
+    if (isConsumer && (activeTab === 'create' || activeTab === 'transfer')) {
+      setActiveTab('list')
+    }
+  }, [isConsumer, activeTab])
 
   const handleCreateToken = async (e: React.FormEvent) => {
     e.preventDefault()
     clearError()
     setSuccess(null)
+
+    // Validar que el JSON de features esté presente y sea válido
+    if (!newToken.features || newToken.features.trim() === '') {
+      setError('El campo de características (JSON) es obligatorio. Por favor, ingresa un JSON válido.')
+      return
+    }
+
+    // Validar que sea un JSON válido
+    let parsedFeatures
+    try {
+      parsedFeatures = JSON.parse(newToken.features)
+    } catch (err) {
+      setError(`El JSON de características no es válido: ${err instanceof Error ? err.message : String(err)}`)
+      return
+    }
+
+    // Validar que tenga los campos mínimos requeridos
+    if (!parsedFeatures.type || !parsedFeatures.labels || !parsedFeatures.labels.display_name) {
+      setError('El JSON de características debe incluir: type, labels.display_name')
+      return
+    }
+
+    // Validar con el validador de schema
+    const validation = validateFeaturesJson(newToken.features)
+    if (!validation.isValid) {
+      setError(`Errores de validación: ${validation.errors.join(', ')}`)
+      return
+    }
 
     const result = await createToken(
       newToken.name,
@@ -226,7 +394,7 @@ function ProductsContent() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
-        {['list', 'create', 'transfer'].map((tab) => (
+        {['list', ...(isConsumer ? [] : ['create', 'transfer'])].map((tab) => (
           <button
             key={tab}
             onClick={() => {
@@ -386,7 +554,9 @@ function ProductsContent() {
               </div>
 
               <div>
-                <label className="label">Características (JSON)</label>
+                <label className="label">
+                  Características (JSON) <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   value={newToken.features}
                   onChange={(e) => setNewToken({ ...newToken, features: e.target.value })}
@@ -396,6 +566,7 @@ function ProductsContent() {
                       : ''
                   }`}
                   placeholder='{"schema_version": "1.0.0", "type": "API_MP", "labels": {"display_name": "Ibuprofeno USP"}, ...}'
+                  required
                 />
                 {newToken.features.trim() && (
                   <div className="mt-2">
@@ -441,10 +612,21 @@ function ProductsContent() {
 
               <button 
                 type="submit" 
-                disabled={isLoading || (newToken.features.trim() !== '' && !validateFeaturesJson(newToken.features).isValid)} 
-                className="btn-primary w-full"
+                disabled={
+                  isLoading || 
+                  !newToken.features.trim() || 
+                  !validateFeaturesJson(newToken.features).isValid
+                } 
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isLoading ? 'Creando...' : 'Crear Token'}
+                {isLoading 
+                  ? 'Creando...' 
+                  : !newToken.features.trim()
+                    ? '⚠️ Ingresa el JSON de características'
+                    : !validateFeaturesJson(newToken.features).isValid
+                      ? '⚠️ Corrige los errores de validación'
+                      : 'Crear Token'
+                }
               </button>
             </form>
           )}
@@ -526,7 +708,10 @@ function ProductsContent() {
                   ) : availableRecipients.length === 0 ? (
                     <div className="p-4 bg-yellow-50 rounded-xl border border-yellow-200">
                       <p className="text-sm text-yellow-800">
-                        No hay destinatarios disponibles para tu rol ({formatRole(user?.role || '')}).
+                        {user?.role.toLowerCase() === 'admin' || user?.role.toLowerCase() === 'administrador' 
+                          ? 'No hay usuarios aprobados disponibles en el sistema.'
+                          : `No hay destinatarios disponibles para tu rol (${formatRole(user?.role || '')}).`
+                        }
                         {getTargetRoleForTransfer(user?.role || '') && (
                           <span className="block mt-1">
                             Debes transferir a: <strong>{formatRole(getTargetRoleForTransfer(user?.role || '') || '')}</strong>
@@ -548,12 +733,18 @@ function ProductsContent() {
                         <option value="">Selecciona un destinatario</option>
                         {availableRecipients.map((recipient) => (
                           <option key={recipient.userAddress} value={recipient.userAddress}>
-                            {recipient.userAddress} ({formatRole(recipient.role)})
+                            #{recipient.id.toString()} ({formatRole(recipient.role)})
                           </option>
                         ))}
                       </select>
                       <p className="text-sm text-surface-500 mt-1">
-                        {availableRecipients.length} destinatario{availableRecipients.length !== 1 ? 's' : ''} disponible{availableRecipients.length !== 1 ? 's' : ''} como {formatRole(getTargetRoleForTransfer(user?.role || '') || '')}
+                        {availableRecipients.length} destinatario{availableRecipients.length !== 1 ? 's' : ''} disponible{availableRecipients.length !== 1 ? 's' : ''}
+                        {user?.role.toLowerCase() === 'admin' || user?.role.toLowerCase() === 'administrador' 
+                          ? ' (todos los roles)' 
+                          : getTargetRoleForTransfer(user?.role || '') 
+                            ? ` como ${formatRole(getTargetRoleForTransfer(user?.role || '') || '')}`
+                            : ''
+                        }
                       </p>
                     </>
                   )}

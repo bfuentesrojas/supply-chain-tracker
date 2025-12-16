@@ -248,19 +248,52 @@ export function formatTypeWithDescription(type: string): string {
 
 /**
  * Extrae los IDs de componentes de un BOM
+ * Soporta ambos formatos:
+ * - Formato nuevo: parents.components (schema JSON)
+ * - Formato antiguo: components (BomFeatures directo)
  */
 export function extractBomComponentIds(features: unknown): number[] {
-  if (!features || typeof features !== 'object') return []
+  if (!features || typeof features !== 'object') {
+    console.log('[DEBUG] extractBomComponentIds: features no es objeto')
+    return []
+  }
   
   const obj = features as Record<string, unknown>
-  if (obj.type !== 'BOM') return []
+  if (obj.type !== 'BOM') {
+    console.log('[DEBUG] extractBomComponentIds: tipo no es BOM', obj.type)
+    return []
+  }
   
+  // Intentar formato nuevo: parents.components
   const parents = obj.parents as Record<string, unknown> | undefined
-  if (!parents?.components || !Array.isArray(parents.components)) return []
+  console.log('[DEBUG] extractBomComponentIds: parents =', parents)
   
-  return (parents.components as Array<{ tokenId?: number }>)
-    .map(c => c.tokenId)
-    .filter((id): id is number => typeof id === 'number' && id > 0)
+  if (parents?.components && Array.isArray(parents.components)) {
+    const componentIds = (parents.components as Array<{ tokenId?: number }>)
+      .map(c => c.tokenId)
+      .filter((id): id is number => typeof id === 'number' && id > 0)
+    
+    console.log('[DEBUG] extractBomComponentIds: IDs extraídos de parents.components =', componentIds)
+    return componentIds
+  }
+  
+  // Intentar formato antiguo: components directamente
+  if (obj.components && Array.isArray(obj.components)) {
+    const componentIds = (obj.components as Array<{ tokenId?: number }>)
+      .map(c => c.tokenId)
+      .filter((id): id is number => typeof id === 'number' && id > 0)
+    
+    console.log('[DEBUG] extractBomComponentIds: IDs extraídos de components (formato antiguo) =', componentIds)
+    return componentIds
+  }
+  
+  console.log('[DEBUG] extractBomComponentIds: no se encontraron components en ningún formato', {
+    hasParents: !!parents,
+    hasParentsComponents: !!parents?.components,
+    hasDirectComponents: !!obj.components,
+    objKeys: Object.keys(obj)
+  })
+  return []
 }
 
 /**
@@ -294,3 +327,4 @@ export function isComplianceToken(features: unknown): boolean {
 export function getSchemaVersion() {
   return '1.0.0'
 }
+

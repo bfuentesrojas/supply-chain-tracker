@@ -193,10 +193,40 @@ export function buildBomFeatures(input: BomBuilderInput): BuilderResult<BomFeatu
   const validation = validateFeatures(features)
   
   if (validation.success) {
+    // Transformar al formato del schema JSON antes de serializar
+    const schemaJson = {
+      schema_version: '1.0.0',
+      type: 'BOM',
+      labels: {
+        display_name: `BOM: ${input.productName}`
+      },
+      parents: {
+        linking_strategy: 'single_parent',
+        primary_parent_id: 0,
+        components: input.components.map(comp => ({
+          tokenId: comp.tokenId,
+          qty: comp.quantity,
+          uom: comp.unit,
+          role: comp.isActive ? 'API' : 'Excipient'
+        }))
+      },
+      // Campos adicionales en custom si es necesario
+      custom: {
+        productName: input.productName,
+        version: input.version,
+        totalYield: {
+          value: input.totalYieldValue,
+          unit: input.totalYieldUnit
+        },
+        ...(input.instructions && { instructions: input.instructions }),
+        ...(input.ispRegistration && { ispRegistration: input.ispRegistration })
+      }
+    }
+
     return {
       success: true,
       data: features,
-      json: JSON.stringify(features),
+      json: JSON.stringify(schemaJson),
       errors: []
     }
   }

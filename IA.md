@@ -103,6 +103,8 @@
 
 ### Sesión 5: Mejoras de UX y Validaciones (15 de Diciembre, 2024)
 
+### Sesión 6: Correcciones y Mejoras Finales (Diciembre 2024)
+
 #### Sistema de Tokens Farmacéuticos
 | Tarea | Tiempo Estimado |
 |-------|-----------------|
@@ -165,12 +167,12 @@
 | **Total Sesión 5** | **~63 minutos** |
 
 ### Resumen Total del Proyecto
-| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Total |
-|------------|----------|----------|----------|----------|----------|-------|
-| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | **~66 min** |
-| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | **~304 min** |
-| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | **~30 min** |
-| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~400 min (~6h 40min)** |
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Total |
+|------------|----------|----------|----------|----------|----------|----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | **~66 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | **~350 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | **~35 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~451 min (~7h 31min)** |
 
 ---
 
@@ -274,12 +276,12 @@ cast send <address> --value 10ether --private-key <anvil-key>
 
 ### Métricas Finales del Chat
 
-| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Total |
-|---------|----------|----------|----------|----------|----------|-------|
-| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~41 |
-| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 60+ |
-| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~11,100 |
-| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 (final) |
+| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Total |
+|---------|----------|----------|----------|----------|----------|----------|-------|
+| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~8 | ~49 |
+| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 6+ | 66+ |
+| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~600 | ~11,700 |
+| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 | 50 (final) |
 
 ---
 
@@ -327,9 +329,36 @@ Tipos de tokens implementados:
   - Ejemplos acordes a medicamentos
   - ParentId como lista desplegable de tokens propios
 
+### Correcciones y Mejoras Finales (Sesión 6)
+- **Listado de destinatarios corregido**:
+  - Admin: Ve todos los usuarios aprobados (excluyendo su propia cuenta)
+  - Fabricante: Solo ve distribuidores
+  - Distribuidor: Solo ve minoristas
+  - Minorista: Solo ve consumidores
+  - Formato de visualización: `#número (rol)` en lugar de dirección
+- **Dashboard con totalizadores personalizados por rol**:
+  - Admin: Total Tokens, Total Usuarios, Total Transferencias, Mi Estado
+  - Fabricante/Distribuidor/Retailer: Mis Tokens, Transferencias Enviadas, Transferencias Recibidas, Mi Estado
+  - Consumidor: Mis Tokens, Transferencias Recibidas, Mi Estado
+- **Restricciones para consumidores**:
+  - Enlace "Tokens" oculto en navbar
+  - Enlace "+ Crear" oculto en navbar
+  - Pestañas "Crear Token" y "Transferir" ocultas en página de productos
+  - Redirección automática si intentan acceder a estas opciones
+- **Validación obligatoria del campo JSON**:
+  - Campo requerido con validación HTML
+  - Validación JavaScript de JSON válido
+  - Validación de campos mínimos requeridos
+  - Botón deshabilitado si no hay JSON válido
+- **Corrección visualización componentes BOM**:
+  - Componentes BOM ahora se muestran como sub-nivel bajo cada BOM en el árbol de jerarquía
+  - Corrección del builder de BOM para generar JSON con estructura correcta (`parents.components`)
+- **Corrección bug en getUsersByRole**:
+  - Conversión explícita de `user.status` a número antes de comparar con `UserStatus.Approved`
+
 ### Características de Trazabilidad
 - Vista de jerarquía completa (árbol visual)
-- **Componentes BOM mostrados como nivel 0** (materias primas sobre el BOM)
+- **Componentes BOM mostrados como sub-nivel bajo cada BOM** (materias primas bajo el BOM)
 - **Tokens compliance como sub-nivel** en la jerarquía
 - Timeline de transferencias cronológico
 - Detección automática de Token IDs en features (links navegables)
@@ -406,10 +435,10 @@ supply-chain-tracker/
 
 | Métrica | Valor |
 |---------|-------|
-| Tiempo total de desarrollo | ~5h 32min |
-| Sesiones de desarrollo | 4 |
-| Archivos de código creados | 50+ |
-| Líneas de código totales | ~9,900+ |
+| Tiempo total de desarrollo | ~7h 31min |
+| Sesiones de desarrollo | 6 |
+| Archivos de código creados | 66+ |
+| Líneas de código totales | ~11,700+ |
 | Tests unitarios | 50 |
 | Páginas del frontend | 6 |
 | Componentes React | 10+ |
@@ -434,12 +463,48 @@ supply-chain-tracker/
 5. **Ejemplos mejorados**: Nombres de tokens acordes a medicamentos
 
 ### Mejoras Visuales
-1. **Jerarquía BOM**: Componentes del BOM mostrados como nivel 0 (verde) sobre el BOM
+1. **Jerarquía BOM**: Componentes del BOM mostrados como sub-nivel bajo cada BOM (verde)
 2. **Tokens compliance**: Mostrados como sub-nivel (morado) en la jerarquía
 3. **Descripción de tipos**: Formato "API_MP (Materia Prima)" en JSON
 4. **Perfil en transferencias**: Muestra rol entre paréntesis junto a dirección
 
+## 2.9. Correcciones y Mejoras Finales (Sesión 6 - Diciembre 2024)
+
+### Correcciones de Funcionalidad
+1. **Listado de destinatarios corregido**:
+   - Implementación correcta de la lógica de filtrado por rol
+   - Admin ve todos los usuarios aprobados (excluyendo su propia cuenta)
+   - Formato de visualización mejorado: `#número (rol)` en lugar de dirección completa
+   - Corrección de bug en comparación de estado de usuario (`getUsersByRole`)
+
+2. **Dashboard con totalizadores personalizados**:
+   - Implementación de totalizadores específicos por rol
+   - Admin: Mantiene totalizadores globales
+   - Productores (Fabricante/Distribuidor/Retailer): Totalizadores personales
+   - Consumidor: Totalizadores limitados (sin transferencias enviadas)
+
+3. **Restricciones de acceso para consumidores**:
+   - Ocultación de enlaces "Tokens" y "+ Crear" en navbar
+   - Ocultación de pestañas "Crear Token" y "Transferir" en página de productos
+   - Redirección automática si intentan acceder a opciones no permitidas
+
+4. **Validación obligatoria del campo JSON**:
+   - Campo marcado como requerido en HTML
+   - Validación JavaScript de JSON válido
+   - Validación de campos mínimos requeridos (type, labels.display_name)
+   - Botón deshabilitado con mensajes claros cuando no hay JSON válido
+
+5. **Corrección de visualización de componentes BOM**:
+   - Componentes BOM ahora se muestran como sub-nivel bajo cada BOM (no como nivel 0)
+   - Corrección del builder de BOM para generar JSON con estructura correcta (`parents.components`)
+   - Soporte para formatos antiguos y nuevos en la función de extracción
+
+### Mejoras Técnicas
+1. **Corrección de comparación de estado**: Conversión explícita de `user.status` a número antes de comparar con enum
+2. **Logs de depuración**: Agregados para facilitar diagnóstico de problemas
+3. **Código más robusto**: Mejoras en manejo de errores y validaciones
+
 ---
 
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
-*Última actualización: 15 de Diciembre, 2024*
+*Última actualización: Diciembre 2024*

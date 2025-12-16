@@ -8,9 +8,10 @@ import { formatAddress, formatTimestamp } from '@/lib/web3Service'
 import { formatTypeWithDescription, extractBomComponentIds, isComplianceToken } from '@/lib/schemaValidator'
 import { AccessGate } from '@/components/AccessGate'
 
-// Tipo extendido para tokens con tokens hijos compliance
+// Tipo extendido para tokens con tokens hijos compliance y componentes BOM
 interface TokenWithCompliance extends Token {
   complianceTokens?: Token[]
+  bomComponents?: Token[] // Componentes del BOM si este token es un BOM
 }
 
 function TrackContentInner() {
@@ -22,7 +23,6 @@ function TrackContentInner() {
   const [token, setToken] = useState<Token | null>(null)
   const [creatorBalance, setCreatorBalance] = useState<bigint>(BigInt(0))
   const [hierarchy, setHierarchy] = useState<TokenWithCompliance[]>([])
-  const [bomComponents, setBomComponents] = useState<Token[]>([]) // Componentes del BOM
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingTrace, setIsLoadingTrace] = useState(false)
@@ -60,7 +60,6 @@ function TrackContentInner() {
     setSearchError(null)
     setToken(null)
     setHierarchy([])
-    setBomComponents([])
     setTransfers([])
 
     try {
@@ -83,12 +82,16 @@ function TrackContentInner() {
       // Obtener jerarquía base
       const hierarchyData = await getTokenHierarchy(BigInt(searchId))
       
-      // Para cada token en la jerarquía, buscar tokens compliance asociados
+      // Para cada token en la jerarquía, buscar tokens compliance asociados y componentes BOM
       const hierarchyWithCompliance: TokenWithCompliance[] = []
       const totalTokens = await getTotalTokens()
       
       for (const hierToken of hierarchyData) {
-        const tokenWithCompliance: TokenWithCompliance = { ...hierToken, complianceTokens: [] }
+        const tokenWithCompliance: TokenWithCompliance = { 
+          ...hierToken, 
+          complianceTokens: [],
+          bomComponents: []
+        }
         
         // Buscar tokens que tengan este token como padre y sean tipo COMPLIANCE_LOG
         for (let i = BigInt(1); i <= totalTokens; i++) {
@@ -105,42 +108,47 @@ function TrackContentInner() {
           }
         }
         
+        // Si este token es un BOM, cargar y validar sus componentes
+        const hierFeatures = parseFeatures(hierToken.features)
+        if (hierFeatures) {
+          const hierTokenType = getTokenType(hierToken.features)
+          if (hierTokenType === 'BOM') {
+            const componentIds = extractBomComponentIds(hierFeatures)
+            console.log('[DEBUG] BOM encontrado:', {
+              tokenId: hierToken.id.toString(),
+              features: hierFeatures,
+              componentIds,
+              parents: hierFeatures.parents
+            })
+            const components: Token[] = []
+            // Validar que los componentes existan
+            for (const compId of componentIds) {
+              try {
+                const compToken = await getToken(BigInt(compId))
+                if (compToken && compToken.id > BigInt(0)) {
+                  components.push(compToken)
+                } else {
+                  console.warn('[DEBUG] Componente no encontrado:', compId)
+                }
+              } catch (err) {
+                console.warn('[DEBUG] Error al cargar componente:', compId, err)
+                // Ignorar componentes que no existen
+              }
+            }
+            console.log('[DEBUG] Componentes cargados para BOM:', {
+              tokenId: hierToken.id.toString(),
+              componentIds,
+              componentsCount: components.length,
+              components: components.map(c => ({ id: c.id.toString(), name: c.name }))
+            })
+            tokenWithCompliance.bomComponents = components
+          }
+        }
+        
         hierarchyWithCompliance.push(tokenWithCompliance)
       }
       
       setHierarchy(hierarchyWithCompliance)
-      
-      // Si el token actual o su padre es un BOM, cargar componentes
-      const features = parseFeatures(tokenData.features)
-      if (features) {
-        const tokenType = getTokenType(tokenData.features)
-        
-        if (tokenType === 'BOM') {
-          // Cargar componentes del BOM
-          const componentIds = extractBomComponentIds(features)
-          const components: Token[] = []
-          for (const compId of componentIds) {
-            const compToken = await getToken(BigInt(compId))
-            if (compToken) components.push(compToken)
-          }
-          setBomComponents(components)
-        } else if (tokenType === 'PT_LOTE' && tokenData.parentId > BigInt(0)) {
-          // Si es PT_LOTE y tiene padre (BOM), cargar componentes del BOM padre
-          const parentToken = await getToken(tokenData.parentId)
-          if (parentToken) {
-            const parentFeatures = parseFeatures(parentToken.features)
-            if (parentFeatures && getTokenType(parentToken.features) === 'BOM') {
-              const componentIds = extractBomComponentIds(parentFeatures)
-              const components: Token[] = []
-              for (const compId of componentIds) {
-                const compToken = await getToken(BigInt(compId))
-                if (compToken) components.push(compToken)
-              }
-              setBomComponents(components)
-            }
-          }
-        }
-      }
       
       // Obtener transferencias
       const transfersData = await getTokenTransfers(BigInt(searchId))
@@ -479,59 +487,12 @@ function TrackContentInner() {
                 <div className="flex justify-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
                 </div>
-              ) : hierarchy.length === 0 && bomComponents.length === 0 ? (
+              ) : hierarchy.length === 0 ? (
                 <div className="text-center py-8 text-surface-500">
                   No hay jerarquía para este token
                 </div>
               ) : (
                 <div className="relative">
-                  {/* Componentes del BOM (Nivel 0 - arriba de todo) */}
-                  {bomComponents.length > 0 && (
-                    <div className="mb-6">
-                      <h4 className="text-sm font-semibold text-surface-600 mb-3 flex items-center gap-2">
-                        <span className="text-lg">🧪</span>
-                        Componentes de la Receta (Materias Primas)
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pl-4 border-l-2 border-green-300">
-                        {bomComponents.map((comp) => {
-                          const compType = getTokenType(comp.features)
-                          return (
-                            <div 
-                              key={comp.id.toString()}
-                              className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-200"
-                            >
-                              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center text-xl">
-                                {getTokenIcon(compType)}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="font-mono text-xs text-green-600">#{comp.id.toString()}</p>
-                                <p className="font-medium text-surface-800 truncate text-sm">{comp.name}</p>
-                                {compType && (
-                                  <span className="text-xs text-green-700">{formatTypeWithDescription(compType)}</span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setTokenId(comp.id.toString())
-                                  handleSearchToken(comp.id.toString())
-                                }}
-                                className="px-2 py-1 text-xs bg-green-200 hover:bg-green-300 rounded transition-colors"
-                              >
-                                Ver
-                              </button>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      {/* Flecha hacia abajo */}
-                      <div className="flex justify-center py-3">
-                        <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                        </svg>
-                      </div>
-                    </div>
-                  )}
-
                   {/* Visual Tree - Jerarquía principal */}
                   <div className="space-y-0">
                     {hierarchy.map((item, index) => {
@@ -539,6 +500,8 @@ function TrackContentInner() {
                       const isLast = index === hierarchy.length - 1
                       const tokenType = getTokenType(item.features)
                       const hasCompliance = item.complianceTokens && item.complianceTokens.length > 0
+                      const hasBomComponents = item.bomComponents && item.bomComponents.length > 0
+                      const isBom = tokenType === 'BOM'
                       
                       return (
                         <div key={item.id.toString()} className="relative">
@@ -602,6 +565,44 @@ function TrackContentInner() {
                             )}
                           </div>
                           
+                          {/* Componentes del BOM (sub-nivel debajo del BOM) */}
+                          {isBom && hasBomComponents && (
+                            <div className="ml-12 mt-2 space-y-2">
+                              <p className="text-xs text-surface-500 flex items-center gap-1">
+                                <span>🧪</span> Componentes de la Receta (Materias Primas):
+                              </p>
+                              {item.bomComponents?.map((comp) => {
+                                const compType = getTokenType(comp.features)
+                                return (
+                                  <div 
+                                    key={comp.id.toString()}
+                                    className="flex items-center gap-3 p-2 bg-green-50 rounded-lg border border-green-200 ml-4"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-lg">
+                                      {getTokenIcon(compType)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-mono text-xs text-green-600">#{comp.id.toString()}</p>
+                                      <p className="font-medium text-surface-800 truncate text-sm">{comp.name}</p>
+                                      {compType && (
+                                        <span className="text-xs text-green-700">{formatTypeWithDescription(compType)}</span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        setTokenId(comp.id.toString())
+                                        handleSearchToken(comp.id.toString())
+                                      }}
+                                      className="px-2 py-1 text-xs bg-green-200 hover:bg-green-300 rounded transition-colors"
+                                    >
+                                      Ver
+                                    </button>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          
                           {/* Tokens Compliance asociados (sub-nivel) */}
                           {hasCompliance && (
                             <div className="ml-12 mt-2 space-y-2">
@@ -657,11 +658,6 @@ function TrackContentInner() {
                   <div className="mt-6 p-4 bg-surface-50 rounded-xl">
                     <p className="text-sm text-surface-600">
                       <strong>Profundidad:</strong> {hierarchy.length} nivel{hierarchy.length !== 1 ? 'es' : ''}
-                      {bomComponents.length > 0 && (
-                        <span className="ml-4">
-                          <strong>Componentes BOM:</strong> {bomComponents.length}
-                        </span>
-                      )}
                       {hierarchy.length > 1 && (
                         <span className="ml-4">
                           <strong>Root:</strong> #{hierarchy[hierarchy.length - 1].id.toString()} - {hierarchy[hierarchy.length - 1].name}

@@ -25,7 +25,6 @@ export function AccessGate({ children, requireApproval = true }: AccessGateProps
     const checkUserStatus = async () => {
       // #region agent log
       console.log('[DEBUG] AccessGate:checkUserStatus:start', {isConnected, account, chainId, expectedChainId: EXPECTED_CHAIN_ID});
-      fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AccessGate.tsx:checkUserStatus:start',message:'Iniciando verificación de usuario',data:{isConnected,account,chainId,expectedChainId:EXPECTED_CHAIN_ID},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,D'})}).catch(()=>{});
       // #endregion
       if (!isConnected || !account) {
         setCheckingUser(false)
@@ -37,7 +36,6 @@ export function AccessGate({ children, requireApproval = true }: AccessGateProps
       if (chainId !== EXPECTED_CHAIN_ID) {
         // #region agent log
         console.log('[DEBUG] AccessGate: Red incorrecta, no verificando usuario', {chainId, expected: EXPECTED_CHAIN_ID});
-        fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AccessGate.tsx:checkUserStatus:WRONG_CHAIN',message:'Red incorrecta - abortando verificación',data:{chainId,expectedChainId:EXPECTED_CHAIN_ID},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'CHAIN'})}).catch(()=>{});
         // #endregion
         setCheckingUser(false)
         setUser(null)
@@ -48,12 +46,10 @@ export function AccessGate({ children, requireApproval = true }: AccessGateProps
       try {
         // #region agent log
         console.log('[DEBUG] AccessGate:beforeGetUserInfo', {account, accountLower: account?.toLowerCase()});
-        fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AccessGate.tsx:checkUserStatus:beforeGetUserInfo',message:'Llamando getUserInfo con account',data:{account,accountLower:account?.toLowerCase()},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,C'})}).catch(()=>{});
         // #endregion
         const userData = await getUserInfo(account)
         // #region agent log
         console.log('[DEBUG] AccessGate:afterGetUserInfo', {userData, hasData: !!userData, idGreaterThanZero: userData ? userData.id > BigInt(0) : false});
-        fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AccessGate.tsx:checkUserStatus:afterGetUserInfo',message:'Resultado de getUserInfo',data:{userData:userData ? {id:userData.id.toString(),userAddress:userData.userAddress,role:userData.role,status:userData.status} : null,hasData:!!userData,idGreaterThanZero:userData ? userData.id > BigInt(0) : false},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,E'})}).catch(()=>{});
         // #endregion
         if (userData && userData.id > BigInt(0)) {
           setUser(userData)
@@ -63,7 +59,6 @@ export function AccessGate({ children, requireApproval = true }: AccessGateProps
       } catch (err) {
         // #region agent log
         console.log('[DEBUG] AccessGate:error', {error: err instanceof Error ? err.message : String(err)});
-        fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AccessGate.tsx:checkUserStatus:error',message:'Error en getUserInfo',data:{error:err instanceof Error ? err.message : String(err)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,D'})}).catch(()=>{});
         // #endregion
         console.error('Error verificando usuario:', err)
         setUser(null)
@@ -95,7 +90,6 @@ export function AccessGate({ children, requireApproval = true }: AccessGateProps
 
   // #region agent log - render debug
   console.log('[DEBUG] AccessGate:RENDER', {isConnected, chainId, expectedChainId: EXPECTED_CHAIN_ID, checkingUser, hasUser: !!user});
-  fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AccessGate.tsx:RENDER',message:'Render AccessGate',data:{isConnected,chainId,expectedChainId:EXPECTED_CHAIN_ID,checkingUser,hasUser:!!user},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'RENDER'})}).catch(()=>{});
   // #endregion
 
   // Si no está conectado, mostrar mensaje

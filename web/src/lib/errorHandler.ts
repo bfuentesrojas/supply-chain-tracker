@@ -214,3 +214,4 @@ export function isUserRejectionError(error: unknown): boolean {
     (err.message?.toLowerCase() || '').includes('user denied')
   )
 }
+

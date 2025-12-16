@@ -79,7 +79,6 @@ export function useSupplyChain() {
     let providerNetwork = null;
     try { providerNetwork = await contract?.runner?.provider?.getNetwork(); } catch(e) {}
     console.log('[DEBUG] useSupplyChain:getUserInfo:entry', {address, hasContract: !!contract, contractAddress: contract?.target, chainId: providerNetwork?.chainId?.toString()});
-    fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSupplyChain.ts:getUserInfo:entry',message:'Entrada a getUserInfo',data:{address,hasContract:!!contract,contractAddress:contract?.target,chainId:providerNetwork?.chainId?.toString()},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,D'})}).catch(()=>{});
     // #endregion
     if (!contract) {
       setError('Contrato no disponible')
@@ -94,12 +93,10 @@ export function useSupplyChain() {
       try { isAdminResult = await contract.isAdmin(address); } catch(e) { isAdminResult = 'ERROR: ' + (e instanceof Error ? e.message : String(e)); }
       try { addressUserId = await contract.addressToUserId(address); } catch(e) { addressUserId = 'ERROR: ' + (e instanceof Error ? e.message : String(e)); }
       console.log('[DEBUG] useSupplyChain:getUserInfo:beforeCall', {address, contractTarget: contract.target, adminAddress, isAdminResult, addressUserId: addressUserId?.toString?.() || addressUserId});
-      fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSupplyChain.ts:getUserInfo:beforeCall',message:'Llamando contract.getUserInfo',data:{address,contractTarget:contract.target,adminAddress,isAdminResult,addressUserId:addressUserId?.toString?.() || addressUserId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'B,E'})}).catch(()=>{});
       // #endregion
       const user = await contract.getUserInfo(address)
       // #region agent log
       console.log('[DEBUG] useSupplyChain:getUserInfo:afterCall', {userId: user.id?.toString(), userAddress: user.userAddress, role: user.role, status: Number(user.status)});
-      fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSupplyChain.ts:getUserInfo:afterCall',message:'Resultado del contrato',data:{userId:user.id?.toString(),userAddress:user.userAddress,role:user.role,status:Number(user.status)},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,E'})}).catch(()=>{});
       // #endregion
       return {
         id: user.id,
@@ -110,7 +107,6 @@ export function useSupplyChain() {
     } catch (err) {
       // #region agent log
       console.log('[DEBUG] useSupplyChain:getUserInfo:error', {error: err instanceof Error ? err.message : String(err), address});
-      fetch('http://127.0.0.1:7242/ingest/c2977f82-4850-45da-ba1a-7bfcf18fe60a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useSupplyChain.ts:getUserInfo:error',message:'Error en contract.getUserInfo',data:{error:err instanceof Error ? err.message : String(err),address},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'C,E'})}).catch(()=>{});
       // #endregion
       console.error('Error obteniendo usuario:', err)
       return null
@@ -513,6 +509,11 @@ export function useSupplyChain() {
       const total = await contract.getTotalUsers()
       const totalNum = Number(total)
       
+      console.log('[DEBUG] getUsersByRole:', {
+        targetRole,
+        totalUsers: totalNum
+      })
+      
       if (totalNum === 0) return []
 
       const usersData: User[] = []
@@ -520,22 +521,63 @@ export function useSupplyChain() {
       for (let i = BigInt(1); i <= totalNum; i++) {
         try {
           const user = await contract.users(i)
-          if (
-            user.id > BigInt(0) && 
-            user.status === UserStatus.Approved &&
-            user.role.toLowerCase() === targetRole.toLowerCase()
-          ) {
+          const userRoleLower = user.role.toLowerCase()
+          const targetRoleLower = targetRole.toLowerCase()
+          const isMatch = userRoleLower === targetRoleLower
+          
+          const statusNum = Number(user.status)
+          const isApprovedCheck = statusNum === UserStatus.Approved
+          const idValidCheck = user.id > BigInt(0)
+          const allConditionsMet = idValidCheck && isApprovedCheck && isMatch
+          
+          console.log('[DEBUG] getUsersByRole - checking user:', {
+            id: user.id.toString(),
+            address: user.userAddress,
+            role: user.role,
+            roleLower: userRoleLower,
+            targetRoleLower,
+            isMatch,
+            status: statusNum,
+            statusRaw: user.status,
+            statusType: typeof user.status,
+            UserStatusApproved: UserStatus.Approved,
+            isApproved: isApprovedCheck,
+            idValid: idValidCheck,
+            allConditionsMet: allConditionsMet
+          })
+          
+          if (allConditionsMet) {
+            console.log('[DEBUG] getUsersByRole - ADDING USER:', {
+              id: user.id.toString(),
+              address: user.userAddress,
+              role: user.role
+            })
             usersData.push({
               id: user.id,
               userAddress: user.userAddress,
               role: user.role,
               status: Number(user.status) as UserStatus
             })
+          } else {
+            console.log('[DEBUG] getUsersByRole - USER NOT ADDED, reasons:', {
+              idValid: idValidCheck,
+              isApproved: isApprovedCheck,
+              isMatch: isMatch,
+              statusNum,
+              UserStatusApproved: UserStatus.Approved
+            })
           }
         } catch (err) {
+          console.error(`[DEBUG] Error obteniendo usuario ${i}:`, err)
           // Continuar si hay error en un usuario
         }
       }
+
+      console.log('[DEBUG] getUsersByRole result:', {
+        targetRole,
+        foundUsers: usersData.length,
+        users: usersData.map(u => ({ id: u.id.toString(), address: u.userAddress, role: u.role }))
+      })
 
       return usersData
     } catch (err) {
