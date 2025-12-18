@@ -46,6 +46,11 @@ const CONTRACT_REVERT_MESSAGES: Record<string, string> = {
   'No puedes transferir a ti mismo': 'No puedes transferirte tokens a ti mismo',
   'La cantidad debe ser mayor a 0': 'La cantidad a transferir debe ser mayor a cero',
   'Balance insuficiente': 'No tienes suficiente balance de este token',
+  'parentIds y parentAmounts deben tener la misma longitud': 'Los arrays de padres y cantidades deben tener la misma longitud',
+  'La cantidad del padre debe ser mayor a 0': 'La cantidad de cada padre debe ser mayor a cero',
+  'Componente insuficiente: no hay suficiente cantidad de componentes para crear el lote': 'No hay suficientes componentes para crear el lote. El número de unidades del lote excede la cantidad de componentes disponibles. Verifica que tengas suficiente cantidad de todos los componentes requeridos por la receta antes de crear el lote.',
+  'Un lote debe tener exactamente un padre (receta)': 'Un lote debe tener exactamente un padre que sea una receta (BOM). Un lote no puede tener múltiples padres ni puede ser creado sin una receta.',
+  'El padre de un lote debe ser una receta (BOM)': 'El padre de un lote debe ser una receta (BOM), no otro tipo de token. Solo las recetas (BOM) pueden ser usadas como padre de un lote.',
   'Destinatario no registrado': 'El destinatario no está registrado en el sistema',
   'Destinatario no aprobado': 'El destinatario no ha sido aprobado por el administrador',
   'Solo el destinatario puede aceptar': 'Solo el destinatario puede aceptar esta transferencia',
@@ -93,25 +98,44 @@ function extractRevertMessage(error: EthersError): string | null {
     error.error?.data?.message,
     error.shortMessage,
     error.info?.error?.message,
+    error.message,
   ]
 
   for (const msg of possibleMessages) {
     if (msg) {
-      // Buscar coincidencia con mensajes conocidos del contrato
+      // Buscar coincidencia con mensajes conocidos del contrato (incluye parcial)
       for (const [revertMsg, friendlyMsg] of Object.entries(CONTRACT_REVERT_MESSAGES)) {
         if (msg.includes(revertMsg)) {
           return friendlyMsg
         }
       }
       
-      // Si hay un mensaje de revert pero no coincide, mostrarlo limpio
-      if (msg.includes('revert') || msg.includes('require')) {
-        // Intentar extraer solo el mensaje relevante
-        const match = msg.match(/reason="([^"]+)"/) || 
-                      msg.match(/reverted with reason string '([^']+)'/) ||
-                      msg.match(/execution reverted: (.+)/)
-        if (match) {
-          return CONTRACT_REVERT_MESSAGES[match[1]] || match[1]
+      // Si hay un mensaje de revert pero no coincide, intentar extraerlo
+      if (msg.includes('revert') || msg.includes('require') || msg.includes('execution reverted')) {
+        // Intentar extraer solo el mensaje relevante de diferentes formatos
+        const patterns = [
+          /reason="([^"]+)"/,
+          /reverted with reason string '([^']+)'/,
+          /execution reverted: (.+?)(?: \(action=|$)/,
+          /execution reverted(?: \(no data present[^)]*\))?:?\s*(.+?)(?: \(action=|$)/,
+          /revert\s+(.+?)(?: \(action=|$)/,
+        ]
+        
+        for (const pattern of patterns) {
+          const match = msg.match(pattern)
+          if (match && match[1]) {
+            const extractedMsg = match[1].trim()
+            // Buscar si el mensaje extraído está en nuestro mapeo
+            for (const [revertMsg, friendlyMsg] of Object.entries(CONTRACT_REVERT_MESSAGES)) {
+              if (extractedMsg.includes(revertMsg)) {
+                return friendlyMsg
+              }
+            }
+            // Si no está mapeado, devolver el mensaje original del contrato si parece ser un mensaje de revert
+            if (extractedMsg.length > 0 && extractedMsg.length < 200 && !extractedMsg.includes('action=')) {
+              return extractedMsg
+            }
+          }
         }
       }
     }
@@ -180,13 +204,28 @@ export function parseTransactionError(error: unknown): string {
     return 'Error de conexión con la red. Verifica tu conexión.'
   }
 
-  // 9. Si hay un shortMessage de ethers.js, usarlo
+  // 9. Si hay un shortMessage de ethers.js, intentar extraer mensaje de revert primero
   if (err.shortMessage) {
-    // Limpiar el mensaje
+    // Intentar extraer mensaje de revert del shortMessage
+    const revertFromShortMsg = extractRevertMessage({ ...err, message: err.shortMessage })
+    if (revertFromShortMsg) {
+      return revertFromShortMsg
+    }
+    
+    // Si no hay revert, usar el shortMessage directamente
     let cleanMessage = err.shortMessage
     if (cleanMessage.includes('user rejected')) {
       return METAMASK_ERROR_CODES[4001]
     }
+    
+    // Si el shortMessage contiene "execution reverted", intentar extraer más información
+    if (cleanMessage.includes('execution reverted')) {
+      const revertMsg = extractRevertMessage({ ...err, message: cleanMessage })
+      if (revertMsg) {
+        return revertMsg
+      }
+    }
+    
     return cleanMessage
   }
 
@@ -214,4 +253,6 @@ export function isUserRejectionError(error: unknown): boolean {
     (err.message?.toLowerCase() || '').includes('user denied')
   )
 }
+
+
 

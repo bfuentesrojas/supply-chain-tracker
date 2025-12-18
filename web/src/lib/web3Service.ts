@@ -18,6 +18,23 @@ export const formatTimestamp = (timestamp: bigint): string => {
   })
 }
 
+// Formatear número con separador de miles (punto) y decimales (coma)
+export const formatNumber = (value: bigint | number | string, decimals: number = 0): string => {
+  const numValue = typeof value === 'bigint' ? Number(value) : typeof value === 'string' ? parseFloat(value) : value
+  
+  if (isNaN(numValue)) return '0'
+  
+  // Formatear con separador de miles (punto) y decimales (coma)
+  // Usar 'es-ES' para formato europeo: 1.234.567,89
+  const formatted = numValue.toLocaleString('es-ES', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+    useGrouping: true
+  })
+  
+  return formatted
+}
+
 // Formatear precio (wei a ether)
 export const formatPrice = (priceWei: bigint): string => {
   return ethers.formatEther(priceWei)

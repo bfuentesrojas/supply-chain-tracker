@@ -24,6 +24,15 @@ contract SupplyChain {
         Rejected    // Rechazada
     }
 
+    /// @dev Tipos de token
+    enum TokenType {
+        API_MP,          // Materia prima / API
+        BOM,             // Receta / composición
+        PT_LOTE,         // Producto terminado - lote
+        SSCC,            // Unidad logística
+        COMPLIANCE_LOG   // Evidencia: TempLog, CAPA, Recall
+    }
+
     // ============ Structs ============
     
     /// @dev Estructura para almacenar información de un token
@@ -31,9 +40,11 @@ contract SupplyChain {
         uint256 id;
         address creator;
         string name;
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          uint256 totalSupply;
+        uint256 totalSupply;
         string features;      // JSON string con características
-        uint256 parentId;     // ID del token padre (0 si no tiene)
+        TokenType tokenType;  // Tipo de token
+        uint256[] parentIds;  // IDs de los tokens padres (vacío si no tiene)
+        uint256[] parentAmounts;  // Cantidades de cada token padre (vacío si no tiene)
         uint256 dateCreated;
     }
 
@@ -231,20 +242,40 @@ contract SupplyChain {
      * @param name Nombre del token
      * @param totalSupply Cantidad total de tokens a crear
      * @param features Características del token en formato JSON
-     * @param parentId ID del token padre (0 si no tiene)
+     * @param tokenType Tipo de token
+     * @param parentIds Array de IDs de tokens padres (vacío si no tiene)
+     * @param parentAmounts Array de cantidades de cada token padre (vacío si no tiene)
      */
     function createToken(
         string memory name,
         uint256 totalSupply,
         string memory features,
-        uint256 parentId
+        TokenType tokenType,
+        uint256[] memory parentIds,
+        uint256[] memory parentAmounts
     ) public onlyApprovedUser {
         require(bytes(name).length > 0, "El nombre no puede estar vacio");
         require(totalSupply > 0, "El supply debe ser mayor a 0");
+        require(parentIds.length == parentAmounts.length, "parentIds y parentAmounts deben tener la misma longitud");
         
-        // Si tiene parentId, verificar que exista
-        if (parentId != 0) {
-            require(parentId < nextTokenId, "Token padre no existe");
+        // Verificar que todos los parentIds existan
+        for (uint256 i = 0; i < parentIds.length; i++) {
+            require(parentIds[i] > 0 && parentIds[i] < nextTokenId, "Token padre no existe");
+            require(parentAmounts[i] > 0, "La cantidad del padre debe ser mayor a 0");
+        }
+
+        // Si es un PT_LOTE, verificar y descontar componentes de la receta
+        if (tokenType == TokenType.PT_LOTE) {
+            require(parentIds.length == 1, "Un lote debe tener exactamente un padre (receta)");
+            
+            uint256 recipeId = parentIds[0];
+            Token memory recipe = _tokens[recipeId];
+            
+            // Verificar que el padre sea una receta (BOM)
+            require(recipe.tokenType == TokenType.BOM, "El padre de un lote debe ser una receta (BOM)");
+            
+            // Verificar balances y descontar componentes de la receta
+            _consumeRecipeComponents(recipe, totalSupply, msg.sender);
         }
 
         uint256 tokenId = nextTokenId;
@@ -255,7 +286,9 @@ contract SupplyChain {
             name: name,
             totalSupply: totalSupply,
             features: features,
-            parentId: parentId,
+            tokenType: tokenType,
+            parentIds: parentIds,
+            parentAmounts: parentAmounts,
             dateCreated: block.timestamp
         });
 
@@ -269,6 +302,43 @@ contract SupplyChain {
 
         emit TokenCreated(tokenId, msg.sender, name, totalSupply);
     }
+
+    /**
+     * @dev Consume componentes de una receta al crear un lote
+     * @param recipe Receta (BOM) que contiene los componentes
+     * @param lotAmount Cantidad de unidades del lote a crear
+     * @param consumer Dirección que consume los componentes
+     */
+    function _consumeRecipeComponents(Token memory recipe, uint256 lotAmount, address consumer) internal {
+        require(recipe.parentIds.length == recipe.parentAmounts.length, "Receta invalida: parentIds y parentAmounts no coinciden");
+        
+        // Verificar que hay suficientes componentes antes de descontar
+        for (uint256 i = 0; i < recipe.parentIds.length; i++) {
+            uint256 componentId = recipe.parentIds[i];
+            uint256 componentAmountPerUnit = recipe.parentAmounts[i];
+            uint256 totalComponentNeeded = componentAmountPerUnit * lotAmount;
+            
+            // Obtener el balance disponible del componente
+            uint256 availableBalance = _tokenBalances[componentId][consumer];
+            
+            // Verificar que hay suficiente balance
+            require(
+                availableBalance >= totalComponentNeeded,
+                "Componente insuficiente: no hay suficiente cantidad de componentes para crear el lote"
+            );
+        }
+        
+        // Si todas las validaciones pasaron, descontar los componentes
+        for (uint256 i = 0; i < recipe.parentIds.length; i++) {
+            uint256 componentId = recipe.parentIds[i];
+            uint256 componentAmountPerUnit = recipe.parentAmounts[i];
+            uint256 totalComponentNeeded = componentAmountPerUnit * lotAmount;
+            
+            // Descontar del balance del consumidor
+            _tokenBalances[componentId][consumer] -= totalComponentNeeded;
+        }
+    }
+
 
     /**
      * @dev Obtiene la información de un token

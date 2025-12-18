@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useWeb3 } from '@/contexts/Web3Context'
 import { useSupplyChain } from '@/hooks/useSupplyChain'
 import { Token, Transfer, User, formatUserStatus, formatTransferStatus, getUserStatusColor, getTransferStatusColor, formatRole, TransferStatus, EXPECTED_CHAIN_ID } from '@/contracts/SupplyChain'
-import { formatAddress, formatTimestamp } from '@/lib/web3Service'
+import { formatAddress, formatTimestamp, formatNumber } from '@/lib/web3Service'
 import Link from 'next/link'
 import { AccessGate } from '@/components/AccessGate'
 
@@ -26,6 +26,7 @@ function DashboardContent() {
     getUserTokens, 
     getUserTransfers, 
     getToken, 
+    getTokenBalance,
     getTransfer,
     getTotalTokens, 
     getTotalUsers,
@@ -39,7 +40,7 @@ function DashboardContent() {
   } = useSupplyChain()
   
   const [user, setUser] = useState<User | null>(null)
-  const [tokens, setTokens] = useState<Token[]>([])
+  const [tokens, setTokens] = useState<(Token & { balance: bigint })[]>([])
   const [transfers, setTransfers] = useState<TransferWithUserInfo[]>([])
   const [stats, setStats] = useState({ totalTokens: 0, totalUsers: 0, totalTransfers: 0 })
   const [isAdmin, setIsAdmin] = useState(false)
@@ -89,12 +90,15 @@ function DashboardContent() {
         totalTransfers: Number(totalTransfers)
       })
 
-      // Cargar tokens del usuario
+      // Cargar tokens del usuario con balance
       const tokenIds = await getUserTokens(account)
-      const tokensData: Token[] = []
+      const tokensData: (Token & { balance: bigint })[] = []
       for (const id of tokenIds) {
         const token = await getToken(id)
-        if (token) tokensData.push(token)
+        if (token) {
+          const balance = await getTokenBalance(id, account)
+          tokensData.push({ ...token, balance })
+        }
       }
       setTokens(tokensData)
 
@@ -199,7 +203,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Total Tokens</p>
-                <p className="text-2xl font-bold text-surface-800">{stats.totalTokens}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(stats.totalTokens)}</p>
               </div>
             </div>
           </div>
@@ -213,7 +217,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Total Usuarios</p>
-                <p className="text-2xl font-bold text-surface-800">{stats.totalUsers}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(stats.totalUsers)}</p>
               </div>
             </div>
           </div>
@@ -227,7 +231,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Total Transferencias</p>
-                <p className="text-2xl font-bold text-surface-800">{stats.totalTransfers}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(stats.totalTransfers)}</p>
               </div>
             </div>
           </div>
@@ -260,7 +264,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Mis Tokens</p>
-                <p className="text-2xl font-bold text-surface-800">{tokens.length}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(tokens.length)}</p>
               </div>
             </div>
           </div>
@@ -274,7 +278,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Transferencias Enviadas</p>
-                <p className="text-2xl font-bold text-surface-800">{sentTransfers.length}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(sentTransfers.length)}</p>
               </div>
             </div>
           </div>
@@ -288,7 +292,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Transferencias Recibidas</p>
-                <p className="text-2xl font-bold text-surface-800">{receivedTransfers.length}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(receivedTransfers.length)}</p>
               </div>
             </div>
           </div>
@@ -321,7 +325,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Mis Tokens</p>
-                <p className="text-2xl font-bold text-surface-800">{tokens.length}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(tokens.length)}</p>
               </div>
             </div>
           </div>
@@ -335,7 +339,7 @@ function DashboardContent() {
               </div>
               <div>
                 <p className="text-sm text-surface-500">Transferencias Recibidas</p>
-                <p className="text-2xl font-bold text-surface-800">{receivedTransfers.length}</p>
+                <p className="text-2xl font-bold text-surface-800">{formatNumber(receivedTransfers.length)}</p>
               </div>
             </div>
           </div>
@@ -379,7 +383,7 @@ function DashboardContent() {
             </div>
             <div>
               <p className="text-sm text-surface-500">Mis Tokens</p>
-              <p className="font-medium text-surface-800">{tokens.length}</p>
+              <p className="font-medium text-surface-800">{formatNumber(tokens.length)}</p>
             </div>
           </div>
         </div>
@@ -402,7 +406,7 @@ function DashboardContent() {
                     Transfer #{t.id.toString()} - Token #{t.tokenId.toString()}
                   </p>
                   <p className="text-sm text-surface-500">
-                    De: {formatAddress(t.from, 6)} | Cantidad: {t.amount.toString()}
+                    De: {formatAddress(t.from, 6)} | Cantidad: {formatNumber(t.amount)}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -500,6 +504,7 @@ function DashboardContent() {
                 <tr className="border-b border-surface-200">
                   <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">ID</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Nombre</th>
+                  <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Mi Balance</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Supply</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Creado</th>
                   <th className="text-left py-3 px-4 text-sm font-semibold text-surface-600">Acciones</th>
@@ -508,10 +513,11 @@ function DashboardContent() {
               <tbody>
                 {tokens.slice(0, 5).map((token) => (
                   <tr key={token.id.toString()} className="border-b border-surface-100 hover:bg-surface-50">
-                    <td className="py-3 px-4 font-mono text-sm">#{token.id.toString()}</td>
-                    <td className="py-3 px-4 font-medium text-surface-800">{token.name}</td>
-                    <td className="py-3 px-4 text-surface-600">{token.totalSupply.toString()}</td>
-                    <td className="py-3 px-4 text-surface-600">{formatTimestamp(token.dateCreated)}</td>
+                    <td className="py-3 px-4 text-sm text-surface-700">#{token.id.toString()}</td>
+                    <td className="py-3 px-4 text-sm text-surface-700">{token.name}</td>
+                    <td className="py-3 px-4 text-sm text-surface-700">{formatNumber(token.balance)}</td>
+                    <td className="py-3 px-4 text-sm text-surface-700">{formatNumber(token.totalSupply)}</td>
+                    <td className="py-3 px-4 text-sm text-surface-700">{formatTimestamp(token.dateCreated)}</td>
                     <td className="py-3 px-4">
                       <Link
                         href={`/track?id=${token.id}`}
@@ -556,9 +562,9 @@ function DashboardContent() {
               <tbody>
                 {transfers.slice(0, 10).map((t) => (
                   <tr key={t.id.toString()} className="border-b border-surface-100 hover:bg-surface-50">
-                    <td className="py-3 px-4 font-mono text-sm">#{t.id.toString()}</td>
-                    <td className="py-3 px-4">#{t.tokenId.toString()}</td>
-                    <td className="py-3 px-4 text-surface-600">
+                    <td className="py-3 px-4 font-mono text-sm text-surface-700">#{t.id.toString()}</td>
+                    <td className="py-3 px-4 font-mono text-sm text-surface-700">#{t.tokenId.toString()}</td>
+                    <td className="py-3 px-4 text-surface-700">
                       {t.from.toLowerCase() === account?.toLowerCase() ? (
                         <span>
                           → {formatAddress(t.to, 4)}
@@ -571,7 +577,7 @@ function DashboardContent() {
                         </span>
                       )}
                     </td>
-                    <td className="py-3 px-4">{t.amount.toString()}</td>
+                    <td className="py-3 px-4 text-surface-700">{formatNumber(t.amount)}</td>
                     <td className="py-3 px-4">
                       <span className={`status-badge ${getTransferStatusColor(t.status)}`}>
                         {formatTransferStatus(t.status)}

@@ -1,5 +1,5 @@
 // Dirección del contrato desplegado (actualizar después del deploy)
-export const CONTRACT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3'
+export const CONTRACT_ADDRESS = '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853'
 
 // ChainId esperado (31337 = Anvil/Hardhat local)
 export const EXPECTED_CHAIN_ID = 31337
@@ -180,7 +180,9 @@ export const SUPPLY_CHAIN_ABI = [
       { "name": "name", "type": "string" },
       { "name": "totalSupply", "type": "uint256" },
       { "name": "features", "type": "string" },
-      { "name": "parentId", "type": "uint256" }
+      { "name": "tokenType", "type": "uint8" },
+      { "name": "parentIds", "type": "uint256[]" },
+      { "name": "parentAmounts", "type": "uint256[]" }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -199,7 +201,9 @@ export const SUPPLY_CHAIN_ABI = [
           { "name": "name", "type": "string" },
           { "name": "totalSupply", "type": "uint256" },
           { "name": "features", "type": "string" },
-          { "name": "parentId", "type": "uint256" },
+          { "name": "tokenType", "type": "uint8" },
+          { "name": "parentIds", "type": "uint256[]" },
+          { "name": "parentAmounts", "type": "uint256[]" },
           { "name": "dateCreated", "type": "uint256" }
         ]
       }
@@ -319,6 +323,39 @@ export enum TransferStatus {
   Rejected = 2
 }
 
+// Enums (debe coincidir con el contrato Solidity)
+export enum TokenType {
+  API_MP = 0,
+  BOM = 1,
+  PT_LOTE = 2,
+  SSCC = 3,
+  COMPLIANCE_LOG = 4
+}
+
+// Helper para convertir TokenType de pharma.ts (string) a TokenType del contrato (número)
+export function tokenTypeStringToNumber(type: string): TokenType {
+  const mapping: Record<string, TokenType> = {
+    'API_MP': TokenType.API_MP,
+    'BOM': TokenType.BOM,
+    'PT_LOTE': TokenType.PT_LOTE,
+    'SSCC': TokenType.SSCC,
+    'COMPLIANCE_LOG': TokenType.COMPLIANCE_LOG
+  }
+  return mapping[type] ?? TokenType.API_MP
+}
+
+// Helper para convertir TokenType del contrato (número) a string
+export function tokenTypeNumberToString(type: TokenType): string {
+  const mapping: Record<TokenType, string> = {
+    [TokenType.API_MP]: 'API_MP',
+    [TokenType.BOM]: 'BOM',
+    [TokenType.PT_LOTE]: 'PT_LOTE',
+    [TokenType.SSCC]: 'SSCC',
+    [TokenType.COMPLIANCE_LOG]: 'COMPLIANCE_LOG'
+  }
+  return mapping[type] ?? 'API_MP'
+}
+
 // Interfaces
 export interface Token {
   id: bigint
@@ -326,7 +363,9 @@ export interface Token {
   name: string
   totalSupply: bigint
   features: string
-  parentId: bigint
+  tokenType: TokenType
+  parentIds: bigint[]
+  parentAmounts: bigint[]
   dateCreated: bigint
 }
 

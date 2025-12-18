@@ -105,6 +105,55 @@
 
 ### Sesión 6: Correcciones y Mejoras Finales (Diciembre 2024)
 
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Corrección listado destinatarios | 8 min |
+| Dashboard con totalizadores | 8 min |
+| Restricciones consumidores | 5 min |
+| Validación JSON obligatoria | 5 min |
+| Corrección visualización BOM | 5 min |
+| Corrección bug getUsersByRole | 3 min |
+| Build y verificación | 2 min |
+| **Total Sesión 6** | **~36 minutos** |
+
+### Sesión 7: Sistema de Múltiples Padres y Descuento de Supply (Diciembre 2024)
+
+#### Cambios en el Contrato
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Cambio de parentId a parentIds[] (array) | 3 min |
+| Agregado de parentAmounts[] (array) | 3 min |
+| Implementación de enum TokenType | 2 min |
+| Implementación de descuento de supply para PT_LOTE | 10 min |
+| Función _consumeRecipeComponents | 8 min |
+| Actualización de tests (55 tests) | 15 min |
+| Compilación y verificación | 2 min |
+| **Total Smart Contracts v4** | **~43 minutos** |
+
+#### Cambios en Frontend
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Actualización de tipos TypeScript (Token interface) | 3 min |
+| Actualización de ABI del contrato | 3 min |
+| Actualización de hook useSupplyChain | 5 min |
+| Modificación de CreateTokenWizard para múltiples padres | 8 min |
+| Modificación de página Products para múltiples padres | 5 min |
+| Actualización de schema JSON (remover type, actualizar parents) | 4 min |
+| Actualización de schemaValidator.ts | 5 min |
+| Validaciones mejoradas en frontend para PT_LOTE | 8 min |
+| Mejora de mensajes de error descriptivos | 5 min |
+| Actualización de página Track para múltiples padres | 4 min |
+| Build y verificación | 2 min |
+| **Total Frontend v4** | **~52 minutos** |
+
+### Resumen Total del Proyecto
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Total |
+|------------|----------|----------|----------|----------|----------|----------|----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~43 min | **~109 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~52 min | **~402 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | **~40 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~100 min** | **~551 min (~9h 11min)** |
+
 #### Sistema de Tokens Farmacéuticos
 | Tarea | Tiempo Estimado |
 |-------|-----------------|
@@ -167,12 +216,12 @@
 | **Total Sesión 5** | **~63 minutos** |
 
 ### Resumen Total del Proyecto
-| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Total |
-|------------|----------|----------|----------|----------|----------|----------|-------|
-| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | **~66 min** |
-| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | **~350 min** |
-| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | **~35 min** |
-| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~451 min (~7h 31min)** |
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Total |
+|------------|----------|----------|----------|----------|----------|----------|----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~48 min | **~114 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~71 min | **~421 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | **~40 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~124 min** | **~575 min (~9h 35min)** |
 
 ---
 
@@ -276,12 +325,12 @@ cast send <address> --value 10ether --private-key <anvil-key>
 
 ### Métricas Finales del Chat
 
-| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Total |
-|---------|----------|----------|----------|----------|----------|----------|-------|
-| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~8 | ~49 |
-| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 6+ | 66+ |
-| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~600 | ~11,700 |
-| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 | 50 (final) |
+| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Total |
+|---------|----------|----------|----------|----------|----------|----------|----------|-------|
+| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~8 | ~15 | ~64 |
+| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 6+ | 12+ | 78+ |
+| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~600 | ~1,500 | ~13,200 |
+| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 | 55 | 55 (final) |
 
 ---
 
@@ -290,9 +339,15 @@ cast send <address> --value 10ether --private-key <anvil-key>
 ### Smart Contract (SupplyChain.sol)
 - Gestión de usuarios con estados (Pending, Approved, Rejected, Canceled)
 - Gestión de tokens con características JSON
+- **Enum TokenType**: API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG
+- **Sistema de múltiples padres**: `parentIds[]` y `parentAmounts[]` para tokens con múltiples componentes
+- **Sistema de descuento de supply**: Al crear un PT_LOTE, se validan y descuentan automáticamente los componentes de la receta
 - Sistema de transferencias con aprobación
 - Control de acceso basado en roles
 - Admin hardcodeado para red local
+- **Enum TokenType** para tipos de token (API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG)
+- **Múltiples padres** por token (parentIds[] y parentAmounts[])
+- **Descuento automático de supply** al crear PT_LOTE: valida y descuenta componentes de la receta automáticamente
 
 ### Frontend - Páginas
 | Página | Descripción |
@@ -435,11 +490,11 @@ supply-chain-tracker/
 
 | Métrica | Valor |
 |---------|-------|
-| Tiempo total de desarrollo | ~7h 31min |
-| Sesiones de desarrollo | 6 |
-| Archivos de código creados | 66+ |
-| Líneas de código totales | ~11,700+ |
-| Tests unitarios | 50 |
+| Tiempo total de desarrollo | ~9h 11min |
+| Sesiones de desarrollo | 7 |
+| Archivos de código creados | 78+ |
+| Líneas de código totales | ~13,200+ |
+| Tests unitarios | 55 |
 | Páginas del frontend | 6 |
 | Componentes React | 10+ |
 | Hooks personalizados | 1 |
@@ -468,7 +523,120 @@ supply-chain-tracker/
 3. **Descripción de tipos**: Formato "API_MP (Materia Prima)" en JSON
 4. **Perfil en transferencias**: Muestra rol entre paréntesis junto a dirección
 
+### Sesión 7: Sistema de Múltiples Padres y Descuento de Supply (Diciembre 2024 - Enero 2025)
+
+#### Cambios en Smart Contracts
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Cambio de parentId a parentIds (array) | 5 min |
+| Agregado de enum TokenType | 3 min |
+| Implementación de parentAmounts (array) | 5 min |
+| Sistema de descuento de supply para PT_LOTE | 15 min |
+| Función _consumeRecipeComponents | 8 min |
+| Actualización de tests (55 tests) | 10 min |
+| Compilación y verificación | 2 min |
+| **Total Smart Contracts** | **~48 minutos** |
+
+#### Cambios en Frontend
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Actualización de tipos TypeScript para arrays | 5 min |
+| Actualización de ABI y interfaces | 5 min |
+| Modificación de CreateTokenWizard para múltiples padres | 10 min |
+| Modificación de página Products para múltiples padres | 8 min |
+| Validaciones frontend para PT_LOTE | 10 min |
+| Validación de componentes disponibles | 12 min |
+| Mejoras en errorHandler para mensajes descriptivos | 8 min |
+| Actualización de schema JSON (eliminación de type) | 5 min |
+| Corrección de referencias parentId → parentIds | 5 min |
+| Build y verificación | 3 min |
+| **Total Frontend** | **~71 minutos** |
+
+#### Funcionalidades Implementadas
+1. **Sistema de múltiples padres**:
+   - Cambio de `parentId` (uint256) a `parentIds` (uint256[])
+   - Agregado de `parentAmounts` (uint256[]) para almacenar cantidades por padre
+   - Soporte para tokens con múltiples componentes padre
+
+2. **Enum TokenType**:
+   - Enum en el contrato: API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG
+   - Tipo de token ahora es un parámetro directo del contrato, no solo en JSON
+
+3. **Sistema de descuento de supply para lotes (PT_LOTE)**:
+   - Validación automática de componentes disponibles al crear un lote
+   - Descuento automático de balances de componentes al crear un lote
+   - Cálculo: `cantidadNecesaria = cantidadPorUnidad * cantidadLote`
+   - Validación: verifica que todos los componentes tengan suficiente balance antes de descontar
+   - Si falta algún componente, la transacción revierte con mensaje descriptivo
+
+4. **Validaciones mejoradas en frontend**:
+   - Validación de padre único para PT_LOTE antes de enviar transacción
+   - Validación de componentes suficientes antes de crear el lote
+   - Mensajes de error descriptivos y específicos
+
+5. **Mensajes de error mejorados**:
+   - Parseo mejorado de errores del contrato
+   - Mensajes descriptivos para cada validación
+   - Feedback inmediato en el frontend antes de enviar transacciones
+
 ## 2.9. Correcciones y Mejoras Finales (Sesión 6 - Diciembre 2024)
+
+## 2.10. Sistema de Múltiples Padres y Descuento de Supply (Sesión 7 - Diciembre 2024)
+
+### Cambios en la Estructura del Contrato
+
+1. **Múltiples Padres**:
+   - Cambio de `uint256 parentId` a `uint256[] parentIds` en struct Token
+   - Agregado de `uint256[] parentAmounts` para almacenar cantidades de cada padre
+   - Actualización de función `createToken` para aceptar arrays de padres y cantidades
+
+2. **Enum TokenType**:
+   - Implementación de enum `TokenType` con 5 valores: API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG
+   - Agregado `tokenType` al struct Token
+   - Validaciones específicas según tipo de token
+
+3. **Descuento Automático de Supply para PT_LOTE**:
+   - Cuando se crea un PT_LOTE con una receta (BOM) como padre:
+     - Se valida que el padre sea una receta (BOM)
+     - Se valida que haya exactamente un padre
+     - Se calcula la cantidad necesaria de cada componente: `cantidadPorUnidad * cantidadLote`
+     - Se verifica que haya suficientes componentes disponibles
+     - Se descuentan automáticamente los balances de los componentes
+   - Función interna `_consumeRecipeComponents` implementa toda la lógica de validación y descuento
+
+### Cambios en Frontend
+
+1. **Actualización de Tipos**:
+   - Interface `Token` actualizada con `tokenType`, `parentIds[]`, `parentAmounts[]`
+   - Helper functions para convertir entre TokenType del contrato (número) y string
+
+2. **Wizard de Creación**:
+   - Modificado para permitir agregar múltiples padres con sus cantidades
+   - Selector de tipo de token visible
+   - UI mejorada para gestionar lista de padres dinámicamente
+
+3. **Validaciones Mejoradas**:
+   - Validación en frontend antes de enviar transacción:
+     - PT_LOTE debe tener exactamente un padre (receta)
+     - Verificación de balances suficientes antes de crear el lote
+     - Mensajes descriptivos por cada componente insuficiente
+   - Mensajes de error mejorados con información específica
+
+4. **Schema JSON Actualizado**:
+   - Removido campo `type` del JSON (ahora es parte del contrato)
+   - Simplificada estructura de `parents` en el schema
+   - Validador actualizado para no requerir `type` en JSON
+
+### Tests Agregados
+
+5 nuevos tests específicos para el descuento de supply:
+- `testCreateLotWithRecipeConsumesComponents`: Verifica consumo correcto de componentes
+- `testCreateLotWithInsufficientComponents`: Verifica validación cuando no hay suficientes componentes
+- `testCreateLotRequiresBOMAsParent`: Verifica que el padre debe ser BOM
+- `testCreateLotRequiresExactlyOneParent`: Verifica que solo puede tener un padre
+- `testCreateLotWithMultipleComponents`: Verifica consumo de múltiples componentes
+
+Total: **55 tests** (todos pasando)
 
 ### Correcciones de Funcionalidad
 1. **Listado de destinatarios corregido**:
@@ -506,5 +674,84 @@ supply-chain-tracker/
 
 ---
 
+## 2.11. Funcionalidades de Descuento de Supply (Sesión 7)
+
+### Descuento Automático al Crear Lotes (PT_LOTE)
+
+Cuando se crea un token de tipo PT_LOTE:
+1. **Validaciones**:
+   - Debe tener exactamente un padre (receta/BOM)
+   - El padre debe ser una receta (BOM), no otro tipo de token
+   - Se calcula la cantidad necesaria de cada componente: `cantidadPorUnidad * cantidadLote`
+   - Se verifica que haya suficientes componentes disponibles
+
+2. **Descuento Automático**:
+   - Si todas las validaciones pasan, se descuentan automáticamente los balances de todos los componentes
+   - El descuento se hace del balance del creador del lote
+   - La transacción revierte si algún componente es insuficiente
+
+3. **Mensajes de Error Descriptivos**:
+   - Frontend valida antes de enviar la transacción
+   - Muestra mensajes específicos indicando qué componente falta y cuánto se necesita vs. cuánto hay disponible
+   - Mensajes del contrato parseados y traducidos a mensajes amigables
+
+### Validaciones en Frontend
+
+- Validación previa a la transacción para PT_LOTE
+- Cálculo de componentes necesarios antes de crear el lote
+- Verificación de balances disponibles
+- Mensajes descriptivos por cada componente insuficiente
+
+---
+
+## 2.10. Sistema de Múltiples Padres y Descuento de Supply (Sesión 7 - Diciembre 2024/Enero 2025)
+
+### Cambios Principales
+
+1. **Estructura de tokens con múltiples padres**:
+   - **Antes**: `parentId: uint256` (solo un padre)
+   - **Ahora**: `parentIds: uint256[]` y `parentAmounts: uint256[]` (múltiples padres con cantidades)
+
+2. **Enum TokenType en el contrato**:
+   - Tipo de token ahora es un parámetro directo del contrato
+   - Enum: API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG
+   - Eliminado del JSON de features (solo para compatibilidad hacia atrás)
+
+3. **Sistema de descuento automático de supply**:
+   - Al crear un PT_LOTE que tiene como padre una receta (BOM)
+   - El sistema valida que hay suficientes componentes antes de crear el lote
+   - Calcula: `cantidadNecesaria = cantidadPorUnidad * cantidadLote` para cada componente
+   - Si falta algún componente, revierte con mensaje descriptivo
+   - Si todo está bien, descuenta automáticamente los balances de todos los componentes
+
+4. **Validaciones mejoradas en frontend**:
+   - Validación de padre único para PT_LOTE antes de enviar transacción
+   - Validación de componentes suficientes consultando balances antes de crear el lote
+   - Mensajes de error descriptivos que muestran qué componente falta y cuánto se necesita
+
+5. **Mensajes de error descriptivos**:
+   - Parseo mejorado de errores del contrato
+   - Mensajes específicos para cada validación
+   - Feedback inmediato en el frontend con detalles del problema
+
+### Funcionalidades Específicas
+
+#### Función `_consumeRecipeComponents`
+```solidity
+// Valida y descuenta componentes de una receta al crear un lote
+function _consumeRecipeComponents(Token memory recipe, uint256 lotAmount, address consumer) internal
+```
+
+Esta función:
+1. Valida que hay suficientes componentes para cada uno
+2. Si alguno falta, revierte con mensaje claro
+3. Si todo está bien, descuenta los balances automáticamente
+
+#### Validaciones en Frontend
+- Verificación de padre único (PT_LOTE debe tener exactamente un padre)
+- Verificación de que el padre sea una receta (BOM)
+- Cálculo y verificación de componentes disponibles antes de crear el lote
+- Mensajes descriptivos que indican qué componente falta y cuánto se necesita
+
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
-*Última actualización: Diciembre 2024*
+*Última actualización: Enero 2025*

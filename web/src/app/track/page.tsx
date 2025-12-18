@@ -3,8 +3,8 @@
 import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useSupplyChain } from '@/hooks/useSupplyChain'
-import { Token, Transfer, TransferStatus, formatTransferStatus, getTransferStatusColor } from '@/contracts/SupplyChain'
-import { formatAddress, formatTimestamp } from '@/lib/web3Service'
+import { Token, Transfer, TransferStatus, formatTransferStatus, getTransferStatusColor, formatRole, tokenTypeNumberToString } from '@/contracts/SupplyChain'
+import { formatAddress, formatTimestamp, formatNumber } from '@/lib/web3Service'
 import { formatTypeWithDescription, extractBomComponentIds, isComplianceToken } from '@/lib/schemaValidator'
 import { AccessGate } from '@/components/AccessGate'
 
@@ -14,16 +14,22 @@ interface TokenWithCompliance extends Token {
   bomComponents?: Token[] // Componentes del BOM si este token es un BOM
 }
 
+// Tipo extendido para transferencias con info de usuario
+interface TransferWithUserInfo extends Transfer {
+  fromUserRole?: string
+  toUserRole?: string
+}
+
 function TrackContentInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { getToken, getTokenBalance, getTokenTransfers, getTokenHierarchy, getTotalTokens, error } = useSupplyChain()
+  const { getToken, getTokenBalance, getTokenTransfers, getTokenHierarchy, getTotalTokens, getUserInfo, error } = useSupplyChain()
   
   const [tokenId, setTokenId] = useState('')
   const [token, setToken] = useState<Token | null>(null)
   const [creatorBalance, setCreatorBalance] = useState<bigint>(BigInt(0))
   const [hierarchy, setHierarchy] = useState<TokenWithCompliance[]>([])
-  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [transfers, setTransfers] = useState<TransferWithUserInfo[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingTrace, setIsLoadingTrace] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -97,9 +103,10 @@ function TrackContentInner() {
         for (let i = BigInt(1); i <= totalTokens; i++) {
           try {
             const potentialCompliance = await getToken(i)
-            if (potentialCompliance && potentialCompliance.parentId === hierToken.id) {
+            if (potentialCompliance && potentialCompliance.parentIds.includes(hierToken.id)) {
               const features = parseFeatures(potentialCompliance.features)
-              if (features && isComplianceToken(features)) {
+              const complianceType = getTokenType(potentialCompliance, potentialCompliance.features)
+              if (features && isComplianceToken(features, complianceType || undefined)) {
                 tokenWithCompliance.complianceTokens?.push(potentialCompliance)
               }
             }
@@ -111,9 +118,9 @@ function TrackContentInner() {
         // Si este token es un BOM, cargar y validar sus componentes
         const hierFeatures = parseFeatures(hierToken.features)
         if (hierFeatures) {
-          const hierTokenType = getTokenType(hierToken.features)
+          const hierTokenType = getTokenType(hierToken, hierToken.features)
           if (hierTokenType === 'BOM') {
-            const componentIds = extractBomComponentIds(hierFeatures)
+            const componentIds = extractBomComponentIds(hierFeatures, hierTokenType)
             console.log('[DEBUG] BOM encontrado:', {
               tokenId: hierToken.id.toString(),
               features: hierFeatures,
@@ -150,9 +157,24 @@ function TrackContentInner() {
       
       setHierarchy(hierarchyWithCompliance)
       
-      // Obtener transferencias
+      // Obtener transferencias con info de roles
       const transfersData = await getTokenTransfers(BigInt(searchId))
-      setTransfers(transfersData)
+      const transfersWithRoles: TransferWithUserInfo[] = []
+      for (const transfer of transfersData) {
+        let fromUserRole = ''
+        let toUserRole = ''
+        try {
+          const fromUser = await getUserInfo(transfer.from)
+          if (fromUser) fromUserRole = fromUser.role
+        } catch { /* Usuario no encontrado */ }
+        try {
+          const toUser = await getUserInfo(transfer.to)
+          if (toUser) toUserRole = toUser.role
+        } catch { /* Usuario no encontrado */ }
+        
+        transfersWithRoles.push({ ...transfer, fromUserRole, toUserRole })
+      }
+      setTransfers(transfersWithRoles)
 
     } catch (err) {
       console.error('Error buscando token:', err)
@@ -161,7 +183,7 @@ function TrackContentInner() {
       setIsSearching(false)
       setIsLoadingTrace(false)
     }
-  }, [tokenId, getToken, getTokenBalance, getTokenHierarchy, getTokenTransfers, getTotalTokens])
+  }, [tokenId, getToken, getTokenBalance, getTokenHierarchy, getTokenTransfers, getTotalTokens, getUserInfo])
   
   // Función para volver al token anterior
   const handleGoBack = () => {
@@ -190,11 +212,18 @@ function TrackContentInner() {
     }
   }
 
-  // Obtener tipo de token desde features
-  const getTokenType = (features: string): string | null => {
-    const parsed = parseFeatures(features)
-    if (parsed && typeof parsed.type === 'string') {
-      return parsed.type
+  // Obtener tipo de token (primero del contrato, luego del JSON como fallback)
+  const getTokenType = (token: Token, features?: string): string | null => {
+    // Prioridad 1: usar tokenType del contrato
+    if (token.tokenType !== undefined) {
+      return tokenTypeNumberToString(token.tokenType)
+    }
+    // Prioridad 2: extraer del JSON (retrocompatibilidad)
+    if (features) {
+      const parsed = parseFeatures(features)
+      if (parsed && typeof parsed.type === 'string') {
+        return parsed.type
+      }
     }
     return null
   }
@@ -365,20 +394,20 @@ function TrackContentInner() {
           <div className="card">
             <div className="flex items-start justify-between mb-6">
               <div className="flex items-center gap-4">
-                <div className="text-4xl">{getTokenIcon(getTokenType(token.features))}</div>
+                <div className="text-4xl">{getTokenIcon(getTokenType(token, token.features))}</div>
                 <div>
                   <h2 className="text-2xl font-bold text-surface-800">{token.name}</h2>
                   <p className="text-surface-500 font-mono">Token ID: #{token.id.toString()}</p>
-                  {getTokenType(token.features) && (
+                  {getTokenType(token, token.features) && (
                     <span className="inline-block mt-1 px-2 py-1 bg-primary-100 text-primary-700 rounded text-xs font-semibold">
-                      {formatTypeWithDescription(getTokenType(token.features) || '')}
+                      {formatTypeWithDescription(getTokenType(token, token.features) || '')}
                     </span>
                   )}
                 </div>
               </div>
               <div className="text-right">
                 <div className="px-4 py-2 bg-primary-100 text-primary-700 rounded-lg font-semibold">
-                  Supply: {token.totalSupply.toString()}
+                  Supply: {formatNumber(token.totalSupply)}
                 </div>
                 <p className="text-sm text-surface-500 mt-2">
                   Creado: {formatTimestamp(token.dateCreated)}
@@ -406,7 +435,7 @@ function TrackContentInner() {
                   {tab.label}
                   {tab.count !== undefined && (
                     <span className="ml-2 px-2 py-0.5 bg-surface-100 rounded-full text-xs">
-                      {tab.count}
+                      {formatNumber(tab.count)}
                     </span>
                   )}
                 </button>
@@ -426,22 +455,27 @@ function TrackContentInner() {
                   </div>
                   <div>
                     <p className="text-sm text-surface-500">Balance del Creador</p>
-                    <p className="text-surface-800 font-mono">{creatorBalance.toString()} / {token.totalSupply.toString()}</p>
+                    <p className="text-surface-800 font-mono">{formatNumber(creatorBalance)} / {formatNumber(token.totalSupply)}</p>
                   </div>
                 </div>
                 <div className="space-y-4">
-                  {token.parentId > BigInt(0) && (
+                  {token.parentIds.length > 0 && (
                     <div>
-                      <p className="text-sm text-surface-500">Token Padre</p>
-                      <button
-                        onClick={() => {
-                          setTokenId(token.parentId.toString())
-                          handleSearchToken(token.parentId.toString())
-                        }}
-                        className="text-primary-600 hover:text-primary-700 font-mono"
-                      >
-                        #{token.parentId.toString()} →
-                      </button>
+                      <p className="text-sm text-surface-500">Tokens Padres</p>
+                      <div className="flex flex-wrap gap-2">
+                        {token.parentIds.map((parentId, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => {
+                              setTokenId(parentId.toString())
+                              handleSearchToken(parentId.toString())
+                            }}
+                            className="text-primary-600 hover:text-primary-700 font-mono text-sm"
+                          >
+                            #{parentId.toString()} {idx < token.parentIds.length - 1 ? ',' : ''} →
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                   <div>
@@ -498,7 +532,7 @@ function TrackContentInner() {
                     {hierarchy.map((item, index) => {
                       const isFirst = index === 0
                       const isLast = index === hierarchy.length - 1
-                      const tokenType = getTokenType(item.features)
+                      const tokenType = getTokenType(item, item.features)
                       const hasCompliance = item.complianceTokens && item.complianceTokens.length > 0
                       const hasBomComponents = item.bomComponents && item.bomComponents.length > 0
                       const isBom = tokenType === 'BOM'
@@ -546,7 +580,7 @@ function TrackContentInner() {
                                     {formatTypeWithDescription(tokenType)}
                                   </span>
                                 )}
-                                <span>Supply: {item.totalSupply.toString()}</span>
+                                <span>Supply: {formatNumber(item.totalSupply)}</span>
                                 <span>{formatTimestamp(item.dateCreated)}</span>
                               </div>
                             </div>
@@ -572,7 +606,7 @@ function TrackContentInner() {
                                 <span>🧪</span> Componentes de la Receta (Materias Primas):
                               </p>
                               {item.bomComponents?.map((comp) => {
-                                const compType = getTokenType(comp.features)
+                                const compType = getTokenType(comp, comp.features)
                                 return (
                                   <div 
                                     key={comp.id.toString()}
@@ -735,12 +769,15 @@ function TrackContentInner() {
                                 <p className="text-xs text-surface-500 mb-1">De</p>
                                 <p className="font-mono text-surface-800 truncate">
                                   {formatAddress(transfer.from, 6)}
+                                  {transfer.fromUserRole && (
+                                    <span className="text-xs text-surface-400 ml-1">({formatRole(transfer.fromUserRole)})</span>
+                                  )}
                                 </p>
                               </div>
                               
                               <div className="flex-shrink-0 flex items-center gap-2 px-3 py-2 bg-white rounded-lg">
                                 <span className="font-semibold text-primary-600">
-                                  {transfer.amount.toString()}
+                                  {formatNumber(transfer.amount)}
                                 </span>
                                 <svg className="w-4 h-4 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -751,6 +788,9 @@ function TrackContentInner() {
                                 <p className="text-xs text-surface-500 mb-1">A</p>
                                 <p className="font-mono text-surface-800 truncate">
                                   {formatAddress(transfer.to, 6)}
+                                  {transfer.toUserRole && (
+                                    <span className="text-xs text-surface-400 ml-1">({formatRole(transfer.toUserRole)})</span>
+                                  )}
                                 </p>
                               </div>
                             </div>
@@ -765,24 +805,24 @@ function TrackContentInner() {
                     <div className="flex flex-wrap gap-4 text-sm">
                       <div>
                         <span className="text-surface-500">Total:</span>
-                        <span className="ml-2 font-semibold text-surface-800">{transfers.length}</span>
+                        <span className="ml-2 font-semibold text-surface-800">{formatNumber(transfers.length)}</span>
                       </div>
                       <div>
                         <span className="text-surface-500">Aceptadas:</span>
                         <span className="ml-2 font-semibold text-green-600">
-                          {transfers.filter(t => t.status === TransferStatus.Accepted).length}
+                          {formatNumber(transfers.filter(t => t.status === TransferStatus.Accepted).length)}
                         </span>
                       </div>
                       <div>
                         <span className="text-surface-500">Pendientes:</span>
                         <span className="ml-2 font-semibold text-yellow-600">
-                          {transfers.filter(t => t.status === TransferStatus.Pending).length}
+                          {formatNumber(transfers.filter(t => t.status === TransferStatus.Pending).length)}
                         </span>
                       </div>
                       <div>
                         <span className="text-surface-500">Rechazadas:</span>
                         <span className="ml-2 font-semibold text-red-600">
-                          {transfers.filter(t => t.status === TransferStatus.Rejected).length}
+                          {formatNumber(transfers.filter(t => t.status === TransferStatus.Rejected).length)}
                         </span>
                       </div>
                     </div>

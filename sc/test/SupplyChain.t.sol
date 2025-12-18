@@ -28,13 +28,17 @@ contract SupplyChainTest is Test {
     // ============ Setup y configuración inicial ============
     
     function setUp() public {
-        admin = address(this);
+        // El admin está hardcodeado en el contrato como 0xeD252BAc2D88971cb5B393B0760f05AF27413b91
+        admin = 0xeD252BAc2D88971cb5B393B0760f05AF27413b91;
         producer = makeAddr("producer");
         factory = makeAddr("factory");
         retailer = makeAddr("retailer");
         consumer = makeAddr("consumer");
 
         supplyChain = new SupplyChain();
+        
+        // Configurar el admin para los tests (usar deal para fondear si es necesario)
+        vm.deal(admin, 100 ether);
     }
 
     // ============ Tests de gestión de usuarios ============
@@ -57,6 +61,7 @@ contract SupplyChainTest is Test {
         supplyChain.requestUserRole("producer");
 
         // Admin aprueba
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
 
         SupplyChain.User memory user = supplyChain.getUserInfo(producer);
@@ -69,6 +74,7 @@ contract SupplyChainTest is Test {
         supplyChain.requestUserRole("producer");
 
         // Admin rechaza
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Rejected);
 
         SupplyChain.User memory user = supplyChain.getUserInfo(producer);
@@ -85,16 +91,19 @@ contract SupplyChainTest is Test {
         assertEq(uint(user.status), uint(SupplyChain.UserStatus.Pending));
 
         // Cambiar a Approved
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
         user = supplyChain.getUserInfo(producer);
         assertEq(uint(user.status), uint(SupplyChain.UserStatus.Approved));
 
         // Cambiar a Rejected
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Rejected);
         user = supplyChain.getUserInfo(producer);
         assertEq(uint(user.status), uint(SupplyChain.UserStatus.Rejected));
 
         // Cambiar a Canceled
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Canceled);
         user = supplyChain.getUserInfo(producer);
         assertEq(uint(user.status), uint(SupplyChain.UserStatus.Canceled));
@@ -108,14 +117,15 @@ contract SupplyChainTest is Test {
         // Intentar crear token sin estar aprobado
         vm.prank(producer);
         vm.expectRevert("Usuario no aprobado");
-        supplyChain.createToken("Product", 100, "", 0);
+        supplyChain.createToken("Product", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         // Aprobar usuario
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
 
         // Ahora sí puede crear token
         vm.prank(producer);
-        supplyChain.createToken("Product", 100, "", 0);
+        supplyChain.createToken("Product", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         
         assertEq(supplyChain.getTotalTokens(), 1);
     }
@@ -123,6 +133,7 @@ contract SupplyChainTest is Test {
     function testGetUserInfo() public {
         vm.prank(producer);
         supplyChain.requestUserRole("producer");
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
 
         SupplyChain.User memory user = supplyChain.getUserInfo(producer);
@@ -146,7 +157,7 @@ contract SupplyChainTest is Test {
         _approveUser(producer, "producer");
 
         vm.prank(producer);
-        supplyChain.createToken("Raw Material", 1000, '{"type":"organic"}', 0);
+        supplyChain.createToken("Raw Material", 1000, '{"type":"organic"}', SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         SupplyChain.Token memory token = supplyChain.getToken(1);
         assertEq(token.name, "Raw Material");
@@ -157,10 +168,20 @@ contract SupplyChainTest is Test {
     function testCreateTokenByFactory() public {
         _approveUser(factory, "factory");
 
+        // Factory crea una receta primero (necesaria para PT_LOTE)
         vm.prank(factory);
-        supplyChain.createToken("Processed Product", 500, '{"batch":"A001"}', 0);
+        supplyChain.createToken("Receta", 1, '{"recipe":"R001"}', SupplyChain.TokenType.BOM, new uint256[](0), new uint256[](0));
 
-        SupplyChain.Token memory token = supplyChain.getToken(1);
+        // Factory crea un lote usando la receta
+        uint256[] memory parentIds = new uint256[](1);
+        parentIds[0] = 1; // ID de la receta
+        uint256[] memory parentAmounts = new uint256[](1);
+        parentAmounts[0] = 1;
+
+        vm.prank(factory);
+        supplyChain.createToken("Processed Product", 500, '{"batch":"A001"}', SupplyChain.TokenType.PT_LOTE, parentIds, parentAmounts);
+
+        SupplyChain.Token memory token = supplyChain.getToken(2);
         assertEq(token.name, "Processed Product");
         assertEq(token.creator, factory);
     }
@@ -169,28 +190,37 @@ contract SupplyChainTest is Test {
         _approveUser(retailer, "retailer");
 
         vm.prank(retailer);
-        supplyChain.createToken("Retail Package", 100, '{"sku":"RTL001"}', 0);
+        supplyChain.createToken("Retail Package", 100, '{"sku":"RTL001"}', SupplyChain.TokenType.SSCC, new uint256[](0), new uint256[](0));
 
         SupplyChain.Token memory token = supplyChain.getToken(1);
         assertEq(token.name, "Retail Package");
         assertEq(token.creator, retailer);
     }
 
-    function testTokenWithParentId() public {
+    function testTokenWithParentIds() public {
         _approveUser(producer, "producer");
 
         vm.startPrank(producer);
-        // Crear token padre
-        supplyChain.createToken("Parent Product", 1000, "", 0);
-        // Crear token hijo con parentId = 1
-        supplyChain.createToken("Child Product", 500, "", 1);
+        // Crear una receta (BOM) como padre
+        supplyChain.createToken("Receta Producto", 1, "", SupplyChain.TokenType.BOM, new uint256[](0), new uint256[](0));
+        // Crear token hijo (PT_LOTE) con parentIds = [1] (la receta) y parentAmounts = [1]
+        uint256[] memory parentIds = new uint256[](1);
+        parentIds[0] = 1; // ID de la receta
+        uint256[] memory parentAmounts = new uint256[](1);
+        parentAmounts[0] = 1; // 1 receta por lote
+        supplyChain.createToken("Child Product", 500, "", SupplyChain.TokenType.PT_LOTE, parentIds, parentAmounts);
         vm.stopPrank();
 
         SupplyChain.Token memory parentToken = supplyChain.getToken(1);
         SupplyChain.Token memory childToken = supplyChain.getToken(2);
 
-        assertEq(parentToken.parentId, 0);
-        assertEq(childToken.parentId, 1);
+        assertEq(uint(parentToken.tokenType), uint(SupplyChain.TokenType.BOM));
+        assertEq(parentToken.parentIds.length, 0);
+        assertEq(parentToken.parentAmounts.length, 0);
+        assertEq(childToken.parentIds.length, 1);
+        assertEq(childToken.parentIds[0], 1);
+        assertEq(childToken.parentAmounts.length, 1);
+        assertEq(childToken.parentAmounts[0], 1);
     }
 
     function testTokenMetadata() public {
@@ -199,7 +229,7 @@ contract SupplyChainTest is Test {
         string memory features = '{"color":"blue","weight":"1.5kg","origin":"Spain","certifications":["ISO9001","organic"]}';
         
         vm.prank(producer);
-        supplyChain.createToken("Product with Metadata", 100, features, 0);
+        supplyChain.createToken("Product with Metadata", 100, features, SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         SupplyChain.Token memory token = supplyChain.getToken(1);
         assertEq(token.features, features);
@@ -211,7 +241,7 @@ contract SupplyChainTest is Test {
         _approveUser(producer, "producer");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         // El creador tiene todo el supply
         uint256 balance = supplyChain.getTokenBalance(1, producer);
@@ -226,7 +256,7 @@ contract SupplyChainTest is Test {
         _approveUser(producer, "producer");
 
         vm.prank(producer);
-        supplyChain.createToken("Test Product", 500, '{"test":true}', 0);
+        supplyChain.createToken("Test Product", 500, '{"test":true}', SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         SupplyChain.Token memory token = supplyChain.getToken(1);
         
@@ -235,7 +265,7 @@ contract SupplyChainTest is Test {
         assertEq(token.creator, producer);
         assertEq(token.totalSupply, 500);
         assertEq(token.features, '{"test":true}');
-        assertEq(token.parentId, 0);
+        assertEq(token.parentIds.length, 0);
         assertTrue(token.dateCreated > 0);
     }
 
@@ -243,9 +273,9 @@ contract SupplyChainTest is Test {
         _approveUser(producer, "producer");
 
         vm.startPrank(producer);
-        supplyChain.createToken("Product 1", 100, "", 0);
-        supplyChain.createToken("Product 2", 200, "", 0);
-        supplyChain.createToken("Product 3", 300, "", 0);
+        supplyChain.createToken("Product 1", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Product 2", 200, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Product 3", 300, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.stopPrank();
 
         uint256[] memory tokens = supplyChain.getUserTokens(producer);
@@ -263,7 +293,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Raw Material", 1000, "", 0);
+        supplyChain.createToken("Raw Material", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 500);
@@ -282,7 +312,7 @@ contract SupplyChainTest is Test {
 
         // Producer crea y transfiere a factory
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 500);
         vm.prank(factory);
@@ -306,7 +336,7 @@ contract SupplyChainTest is Test {
 
         // Cadena completa
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 500);
@@ -333,7 +363,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 300);
@@ -359,7 +389,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 300);
@@ -381,7 +411,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 100, "", 0);
+        supplyChain.createToken("Product", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         vm.expectRevert("Balance insuficiente");
@@ -393,7 +423,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 250);
@@ -414,7 +444,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 100);
@@ -435,7 +465,7 @@ contract SupplyChainTest is Test {
         // Factory no está registrado
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         vm.expectRevert("Destinatario no registrado");
@@ -449,7 +479,7 @@ contract SupplyChainTest is Test {
 
         vm.prank(producer);
         vm.expectRevert("Usuario no aprobado");
-        supplyChain.createToken("Product", 100, "", 0);
+        supplyChain.createToken("Product", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
     }
 
     function testUnapprovedUserCannotTransfer() public {
@@ -460,7 +490,7 @@ contract SupplyChainTest is Test {
         supplyChain.requestUserRole("factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         // Producer intenta transferir a factory no aprobado
         vm.prank(producer);
@@ -478,6 +508,7 @@ contract SupplyChainTest is Test {
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
 
         // Admin puede cambiar estado
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
         SupplyChain.User memory user = supplyChain.getUserInfo(producer);
         assertEq(uint(user.status), uint(SupplyChain.UserStatus.Approved));
@@ -491,7 +522,7 @@ contract SupplyChainTest is Test {
 
         // Cadena hasta consumer
         vm.prank(producer);
-        supplyChain.createToken("Product", 100, "", 0);
+        supplyChain.createToken("Product", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 50);
         vm.prank(factory);
@@ -518,7 +549,7 @@ contract SupplyChainTest is Test {
         _approveUser(producer, "producer");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         vm.expectRevert("No puedes transferir a ti mismo");
@@ -532,7 +563,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         vm.expectRevert("La cantidad debe ser mayor a 0");
@@ -561,7 +592,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 100);
@@ -581,7 +612,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         // Primera transferencia rechazada
         vm.prank(producer);
@@ -620,6 +651,7 @@ contract SupplyChainTest is Test {
         vm.expectEmit(true, false, false, true);
         emit UserStatusChanged(producer, SupplyChain.UserStatus.Approved);
         
+        vm.prank(admin);
         supplyChain.changeStatusUser(producer, SupplyChain.UserStatus.Approved);
     }
 
@@ -630,7 +662,7 @@ contract SupplyChainTest is Test {
         vm.expectEmit(true, true, false, true);
         emit TokenCreated(1, producer, "Product", 1000);
         
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
     }
 
     function testTransferInitiatedEvent() public {
@@ -638,7 +670,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         vm.prank(producer);
         vm.expectEmit(true, true, true, true);
@@ -652,7 +684,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 100);
 
@@ -668,7 +700,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 100);
 
@@ -690,7 +722,7 @@ contract SupplyChainTest is Test {
 
         // 2. Producer crea materia prima
         vm.prank(producer);
-        supplyChain.createToken("Raw Coffee Beans", 1000, '{"origin":"Colombia","harvest":"2024"}', 0);
+        supplyChain.createToken("Raw Coffee Beans", 1000, '{"origin":"Colombia","harvest":"2024"}', SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         // 3. Producer -> Factory (500 unidades)
         vm.prank(producer);
@@ -726,9 +758,9 @@ contract SupplyChainTest is Test {
 
         // Crear múltiples tokens
         vm.startPrank(producer);
-        supplyChain.createToken("Product A", 1000, "", 0);
-        supplyChain.createToken("Product B", 500, "", 0);
-        supplyChain.createToken("Product C", 200, "", 0);
+        supplyChain.createToken("Product A", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Product B", 500, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Product C", 200, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.stopPrank();
 
         assertEq(supplyChain.getTotalTokens(), 3);
@@ -764,7 +796,7 @@ contract SupplyChainTest is Test {
 
         // Crear token padre (materia prima)
         vm.prank(producer);
-        supplyChain.createToken("Raw Material", 1000, '{"source":"Farm A"}', 0);
+        supplyChain.createToken("Raw Material", 1000, '{"source":"Farm A"}', SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         // Transferir a factory
         vm.prank(producer);
@@ -772,16 +804,43 @@ contract SupplyChainTest is Test {
         vm.prank(factory);
         supplyChain.acceptTransfer(1);
 
-        // Factory crea producto derivado (con parentId)
+        // Factory crea una receta que usa la materia prima
+        uint256[] memory recipeParentIds = new uint256[](1);
+        recipeParentIds[0] = 1; // Materia prima
+        uint256[] memory recipeParentAmounts = new uint256[](1);
+        recipeParentAmounts[0] = 1; // 1 unidad de materia prima por unidad de producto
+
         vm.prank(factory);
-        supplyChain.createToken("Processed Product", 500, '{"batch":"B001"}', 1);
+        supplyChain.createToken("Receta Producto", 1, '{"recipe":"R001"}', SupplyChain.TokenType.BOM, recipeParentIds, recipeParentAmounts);
+
+        // Factory crea producto derivado (PT_LOTE) usando la receta
+        uint256[] memory parentIds = new uint256[](1);
+        parentIds[0] = 2; // ID de la receta
+        uint256[] memory parentAmounts = new uint256[](1);
+        parentAmounts[0] = 1; // 1 receta por lote
+
+        // Necesita 500 unidades de materia prima (500 * 1 = 500), que tiene
+        vm.prank(factory);
+        supplyChain.createToken("Processed Product", 500, '{"batch":"B001"}', SupplyChain.TokenType.PT_LOTE, parentIds, parentAmounts);
 
         // Verificar trazabilidad
         SupplyChain.Token memory rawMaterial = supplyChain.getToken(1);
-        SupplyChain.Token memory processedProduct = supplyChain.getToken(2);
+        SupplyChain.Token memory recipe = supplyChain.getToken(2);
+        SupplyChain.Token memory processedProduct = supplyChain.getToken(3);
 
-        assertEq(rawMaterial.parentId, 0); // Sin padre
-        assertEq(processedProduct.parentId, 1); // Derivado del token 1
+        assertEq(rawMaterial.parentIds.length, 0); // Sin padre
+        assertEq(rawMaterial.parentAmounts.length, 0);
+        assertEq(recipe.parentIds.length, 1); // Receta usa materia prima
+        assertEq(recipe.parentIds[0], 1);
+        assertEq(recipe.parentAmounts[0], 1); // 1 unidad de materia prima por unidad de producto
+        assertEq(processedProduct.parentIds.length, 1); // Derivado de la receta (token 2)
+        assertEq(processedProduct.parentIds[0], 2);
+        assertEq(processedProduct.parentAmounts[0], 1); // 1 receta por lote
+        
+        // Verificar que la materia prima fue consumida (500 unidades * 1 = 500 unidades)
+        assertEq(supplyChain.getTokenBalance(1, factory), 0); // 500 - 500 = 0
+        assertEq(processedProduct.parentAmounts.length, 1);
+        assertEq(processedProduct.parentAmounts[0], 1); // 1 receta por lote
         assertEq(processedProduct.creator, factory);
 
         // Verificar historial de transferencias
@@ -807,7 +866,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 100);
 
@@ -822,7 +881,7 @@ contract SupplyChainTest is Test {
         _approveUser(factory, "factory");
 
         vm.prank(producer);
-        supplyChain.createToken("Product", 1000, "", 0);
+        supplyChain.createToken("Product", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
         vm.prank(producer);
         supplyChain.transfer(factory, 1, 100);
 
@@ -833,6 +892,7 @@ contract SupplyChainTest is Test {
     }
 
     function testCannotChangeAdminStatus() public {
+        vm.prank(admin);
         vm.expectRevert("No se puede cambiar el estado del admin");
         supplyChain.changeStatusUser(admin, SupplyChain.UserStatus.Rejected);
     }
@@ -860,7 +920,7 @@ contract SupplyChainTest is Test {
         _approveUser(producer, "producer");
         
         vm.prank(producer);
-        supplyChain.createToken("Product", 100, "", 0);
+        supplyChain.createToken("Product", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
 
         assertEq(supplyChain.nextTokenId(), 2);
     }
@@ -870,6 +930,219 @@ contract SupplyChainTest is Test {
     function _approveUser(address user, string memory role) internal {
         vm.prank(user);
         supplyChain.requestUserRole(role);
+        vm.prank(admin);
         supplyChain.changeStatusUser(user, SupplyChain.UserStatus.Approved);
+    }
+
+    function _createTokenHelper(
+        address creator,
+        string memory name,
+        uint256 totalSupply,
+        string memory features,
+        SupplyChain.TokenType tokenType,
+        uint256[] memory parentIds,
+        uint256[] memory parentAmounts
+    ) internal {
+        vm.prank(creator);
+        supplyChain.createToken(name, totalSupply, features, tokenType, parentIds, parentAmounts);
+    }
+
+    // ============ Tests para descuento de supply al crear PT_LOTE ============
+    
+    function testCreateLotWithRecipeConsumesComponents() public {
+        _approveUser(producer, "producer");
+        _approveUser(factory, "factory");
+
+        // 1. Producer crea componentes (API_MP)
+        vm.startPrank(producer);
+        supplyChain.createToken("Componente A", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Componente B", 500, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        vm.stopPrank();
+
+        // 2. Transferir componentes a factory
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 1000); // Componente A
+        vm.prank(producer);
+        supplyChain.transfer(factory, 2, 500);  // Componente B
+        
+        vm.startPrank(factory);
+        supplyChain.acceptTransfer(1);
+        supplyChain.acceptTransfer(2);
+        vm.stopPrank();
+
+        // Verificar que factory tiene los componentes
+        assertEq(supplyChain.getTokenBalance(1, factory), 1000);
+        assertEq(supplyChain.getTokenBalance(2, factory), 500);
+
+        // 3. Factory crea receta (BOM) con los componentes
+        uint256[] memory recipeParentIds = new uint256[](2);
+        recipeParentIds[0] = 1; // Componente A
+        recipeParentIds[1] = 2; // Componente B
+        uint256[] memory recipeParentAmounts = new uint256[](2);
+        recipeParentAmounts[0] = 10; // 10 unidades de A por unidad de producto
+        recipeParentAmounts[1] = 5;  // 5 unidades de B por unidad de producto
+
+        vm.prank(factory);
+        supplyChain.createToken("Receta Producto", 1, "", SupplyChain.TokenType.BOM, recipeParentIds, recipeParentAmounts);
+
+        // 4. Factory crea lote (PT_LOTE) usando la receta
+        // Crear 20 unidades del producto
+        // Necesitará: 20 * 10 = 200 unidades de A, y 20 * 5 = 100 unidades de B
+        uint256[] memory lotParentIds = new uint256[](1);
+        lotParentIds[0] = 3; // ID de la receta
+        uint256[] memory lotParentAmounts = new uint256[](1);
+        lotParentAmounts[0] = 1; // 1 receta por lote
+
+        vm.prank(factory);
+        supplyChain.createToken("Lote Producto", 20, "", SupplyChain.TokenType.PT_LOTE, lotParentIds, lotParentAmounts);
+
+        // Verificar que los componentes fueron descontados
+        assertEq(supplyChain.getTokenBalance(1, factory), 800);  // 1000 - 200 = 800
+        assertEq(supplyChain.getTokenBalance(2, factory), 400);  // 500 - 100 = 400
+
+        // Verificar que el lote fue creado correctamente
+        SupplyChain.Token memory lot = supplyChain.getToken(4);
+        assertEq(lot.name, "Lote Producto");
+        assertEq(lot.totalSupply, 20);
+        assertEq(uint(lot.tokenType), uint(SupplyChain.TokenType.PT_LOTE));
+        assertEq(supplyChain.getTokenBalance(4, factory), 20);
+    }
+
+    function testCreateLotWithInsufficientComponents() public {
+        _approveUser(producer, "producer");
+        _approveUser(factory, "factory");
+
+        // 1. Producer crea componente
+        vm.prank(producer);
+        supplyChain.createToken("Componente A", 100, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+
+        // 2. Transferir componente a factory (solo 100 unidades)
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 100);
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+
+        // 3. Factory crea receta que requiere 10 unidades por producto
+        uint256[] memory recipeParentIds = new uint256[](1);
+        recipeParentIds[0] = 1;
+        uint256[] memory recipeParentAmounts = new uint256[](1);
+        recipeParentAmounts[0] = 10;
+
+        vm.prank(factory);
+        supplyChain.createToken("Receta", 1, "", SupplyChain.TokenType.BOM, recipeParentIds, recipeParentAmounts);
+
+        // 4. Intentar crear un lote de 15 unidades
+        // Necesitará: 15 * 10 = 150 unidades, pero solo hay 100
+        uint256[] memory lotParentIds = new uint256[](1);
+        lotParentIds[0] = 2; // ID de la receta
+        uint256[] memory lotParentAmounts = new uint256[](1);
+        lotParentAmounts[0] = 1;
+
+        vm.prank(factory);
+        vm.expectRevert("Componente insuficiente: no hay suficiente cantidad de componentes para crear el lote");
+        supplyChain.createToken("Lote", 15, "", SupplyChain.TokenType.PT_LOTE, lotParentIds, lotParentAmounts);
+
+        // Verificar que el balance no cambió
+        assertEq(supplyChain.getTokenBalance(1, factory), 100);
+    }
+
+    function testCreateLotRequiresBOMAsParent() public {
+        _approveUser(producer, "producer");
+        _approveUser(factory, "factory");
+
+        // Crear un componente (no una receta)
+        vm.prank(producer);
+        supplyChain.createToken("Componente", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+
+        // Transferir a factory
+        vm.prank(producer);
+        supplyChain.transfer(factory, 1, 1000);
+        vm.prank(factory);
+        supplyChain.acceptTransfer(1);
+
+        // Intentar crear un PT_LOTE con un componente (no BOM) como padre
+        uint256[] memory lotParentIds = new uint256[](1);
+        lotParentIds[0] = 1; // ID del componente
+        uint256[] memory lotParentAmounts = new uint256[](1);
+        lotParentAmounts[0] = 1;
+
+        vm.prank(factory);
+        vm.expectRevert("El padre de un lote debe ser una receta (BOM)");
+        supplyChain.createToken("Lote", 10, "", SupplyChain.TokenType.PT_LOTE, lotParentIds, lotParentAmounts);
+    }
+
+    function testCreateLotRequiresExactlyOneParent() public {
+        _approveUser(factory, "factory");
+
+        // Crear dos recetas
+        vm.startPrank(factory);
+        supplyChain.createToken("Receta 1", 1, "", SupplyChain.TokenType.BOM, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Receta 2", 1, "", SupplyChain.TokenType.BOM, new uint256[](0), new uint256[](0));
+        vm.stopPrank();
+
+        // Intentar crear PT_LOTE con dos padres
+        uint256[] memory lotParentIds = new uint256[](2);
+        lotParentIds[0] = 1;
+        lotParentIds[1] = 2;
+        uint256[] memory lotParentAmounts = new uint256[](2);
+        lotParentAmounts[0] = 1;
+        lotParentAmounts[1] = 1;
+
+        vm.prank(factory);
+        vm.expectRevert("Un lote debe tener exactamente un padre (receta)");
+        supplyChain.createToken("Lote", 10, "", SupplyChain.TokenType.PT_LOTE, lotParentIds, lotParentAmounts);
+    }
+
+    function testCreateLotWithMultipleComponents() public {
+        _approveUser(producer, "producer");
+        _approveUser(factory, "factory");
+
+        // Crear 3 componentes
+        vm.startPrank(producer);
+        supplyChain.createToken("Comp A", 1000, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Comp B", 800, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        supplyChain.createToken("Comp C", 600, "", SupplyChain.TokenType.API_MP, new uint256[](0), new uint256[](0));
+        vm.stopPrank();
+
+        // Transferir todos a factory
+        vm.startPrank(producer);
+        supplyChain.transfer(factory, 1, 1000);
+        supplyChain.transfer(factory, 2, 800);
+        supplyChain.transfer(factory, 3, 600);
+        vm.stopPrank();
+
+        vm.startPrank(factory);
+        supplyChain.acceptTransfer(1);
+        supplyChain.acceptTransfer(2);
+        supplyChain.acceptTransfer(3);
+        vm.stopPrank();
+
+        // Crear receta con 3 componentes
+        uint256[] memory recipeParentIds = new uint256[](3);
+        recipeParentIds[0] = 1;
+        recipeParentIds[1] = 2;
+        recipeParentIds[2] = 3;
+        uint256[] memory recipeParentAmounts = new uint256[](3);
+        recipeParentAmounts[0] = 5;  // 5 de A por unidad
+        recipeParentAmounts[1] = 3;  // 3 de B por unidad
+        recipeParentAmounts[2] = 2;  // 2 de C por unidad
+
+        vm.prank(factory);
+        supplyChain.createToken("Receta Compleja", 1, "", SupplyChain.TokenType.BOM, recipeParentIds, recipeParentAmounts);
+
+        // Crear lote de 50 unidades
+        // Necesitará: 50*5=250 de A, 50*3=150 de B, 50*2=100 de C
+        uint256[] memory lotParentIds = new uint256[](1);
+        lotParentIds[0] = 4; // ID de la receta
+        uint256[] memory lotParentAmounts = new uint256[](1);
+        lotParentAmounts[0] = 1;
+
+        vm.prank(factory);
+        supplyChain.createToken("Lote Completo", 50, "", SupplyChain.TokenType.PT_LOTE, lotParentIds, lotParentAmounts);
+
+        // Verificar balances finales
+        assertEq(supplyChain.getTokenBalance(1, factory), 750);  // 1000 - 250
+        assertEq(supplyChain.getTokenBalance(2, factory), 650);  // 800 - 150
+        assertEq(supplyChain.getTokenBalance(3, factory), 500);  // 600 - 100
     }
 }

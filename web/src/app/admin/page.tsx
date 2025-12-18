@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useWeb3 } from '@/contexts/Web3Context'
 import { useSupplyChain } from '@/hooks/useSupplyChain'
 import { User, UserStatus, formatUserStatus, getUserStatusColor, formatRole, EXPECTED_CHAIN_ID } from '@/contracts/SupplyChain'
-import { formatAddress } from '@/lib/web3Service'
+import { formatAddress, formatNumber } from '@/lib/web3Service'
 import { AccessGate } from '@/components/AccessGate'
 
 function AdminContent() {
@@ -274,7 +274,7 @@ function AdminContent() {
       <div className="card">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-surface-800">
-            Usuarios ({filteredUsers.length} de {totalUsers})
+            Usuarios ({formatNumber(filteredUsers.length)} de {formatNumber(totalUsers)})
           </h2>
           
           {/* Selector de página */}

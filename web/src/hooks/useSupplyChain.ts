@@ -7,7 +7,8 @@ import {
   Transfer, 
   User, 
   UserStatus, 
-  TransferStatus 
+  TransferStatus,
+  TokenType
 } from '@/contracts/SupplyChain'
 import { parseTransactionError } from '@/lib/errorHandler'
 
@@ -132,10 +133,17 @@ export function useSupplyChain() {
     name: string,
     totalSupply: bigint,
     features: string,
-    parentId: bigint
+    tokenType: number, // TokenType enum como número (0-4)
+    parentIds: bigint[],
+    parentAmounts: bigint[]
   ): Promise<boolean> => {
     if (!contract) {
       setError('Contrato no disponible')
+      return false
+    }
+
+    if (parentIds.length !== parentAmounts.length) {
+      setError('parentIds y parentAmounts deben tener la misma longitud')
       return false
     }
 
@@ -143,13 +151,113 @@ export function useSupplyChain() {
     setError(null)
 
     try {
-      const tx = await contract.createToken(name, totalSupply, features, parentId)
+      // Asegurar que los arrays no sean undefined/null y sean del tipo correcto
+      const safeParentIds: bigint[] = (parentIds || []).map(id => BigInt(id.toString()))
+      const safeParentAmounts: bigint[] = (parentAmounts || []).map(amt => BigInt(amt.toString()))
+      
+      console.log('[DEBUG] createToken:', {
+        name,
+        totalSupply: totalSupply.toString(),
+        tokenType,
+        parentIdsLength: safeParentIds.length,
+        parentAmountsLength: safeParentAmounts.length,
+        parentIds: safeParentIds.map(id => id.toString()),
+        parentAmounts: safeParentAmounts.map(amt => amt.toString()),
+        parentIdsType: typeof safeParentIds[0],
+        parentAmountsType: typeof safeParentAmounts[0]
+      })
+
+      // Asegurar que los arrays sean realmente arrays y no undefined
+      if (!Array.isArray(safeParentIds) || !Array.isArray(safeParentAmounts)) {
+        setError('Los arrays de parentIds y parentAmounts deben ser arrays válidos')
+        return false
+      }
+
+      // Validar nombre no vacío
+      if (!name || name.trim().length === 0) {
+        setError('El nombre del token no puede estar vacío')
+        return false
+      }
+
+      // Validar totalSupply mayor a 0
+      if (totalSupply <= BigInt(0)) {
+        setError('El supply debe ser mayor a 0')
+        return false
+      }
+
+      console.log('[DEBUG] createToken: calling contract with:', {
+        name: name.trim(),
+        totalSupply: totalSupply.toString(),
+        tokenType,
+        parentIds: safeParentIds,
+        parentAmounts: safeParentAmounts,
+        featuresLength: features.length,
+        parentIdsIsArray: Array.isArray(safeParentIds),
+        parentAmountsIsArray: Array.isArray(safeParentAmounts)
+      })
+
+      // Intentar estimar el gas primero para obtener un error más descriptivo
+      try {
+        const gasEstimate = await contract.createToken.estimateGas(name.trim(), totalSupply, features, tokenType, safeParentIds, safeParentAmounts)
+        console.log('[DEBUG] Gas estimate:', gasEstimate.toString())
+      } catch (estimateErr: any) {
+        console.error('[DEBUG] Gas estimate failed:', estimateErr)
+        // El error de estimación puede tener más información
+        if (estimateErr.data) {
+          console.error('[DEBUG] Estimate error data:', estimateErr.data)
+        }
+        if (estimateErr.reason) {
+          console.error('[DEBUG] Estimate error reason:', estimateErr.reason)
+        }
+        // Intentar decodificar el error
+        try {
+          const decoded = contract.interface.parseError(estimateErr.data || '')
+          console.error('[DEBUG] Decoded error:', decoded)
+        } catch (decodeErr) {
+          console.error('[DEBUG] Could not decode error')
+        }
+        throw estimateErr
+      }
+
+      const tx = await contract.createToken(name.trim(), totalSupply, features, tokenType, safeParentIds, safeParentAmounts)
       await tx.wait()
       return true
     } catch (err) {
       const message = parseTransactionError(err)
       setError(message)
       console.error('Error creando token:', err)
+      // Log detallado del error para debugging
+      if (err && typeof err === 'object') {
+        const errObj = err as any
+        console.error('Error details:', {
+          code: errObj.code,
+          message: errObj.message,
+          reason: errObj.reason,
+          data: errObj.data,
+          shortMessage: errObj.shortMessage,
+          error: errObj.error,
+          info: errObj.info
+        })
+        // El mensaje ya fue parseado por parseTransactionError, usarlo directamente
+        // Solo intentar decodificar si el mensaje es muy genérico
+        if (message === 'Error en la ejecución del contrato' && errObj.data && contract) {
+          try {
+            const decoded = contract.interface.parseError(errObj.data)
+            console.error('[DEBUG] Decoded error from data:', decoded)
+            // Si decodificamos algo útil, intentar parsearlo también
+            if (decoded?.name) {
+              const enhancedErr = { ...errObj, reason: decoded.name }
+              const enhancedMessage = parseTransactionError(enhancedErr)
+              if (enhancedMessage !== message) {
+                setError(enhancedMessage)
+                return false
+              }
+            }
+          } catch (decodeErr) {
+            console.error('[DEBUG] Could not decode error data')
+          }
+        }
+      }
       return false
     } finally {
       setIsLoading(false)
@@ -171,7 +279,9 @@ export function useSupplyChain() {
         name: token.name,
         totalSupply: token.totalSupply,
         features: token.features,
-        parentId: token.parentId,
+        tokenType: Number(token.tokenType) as TokenType,
+        parentIds: token.parentIds.map((id: bigint) => id),
+        parentAmounts: token.parentAmounts.map((amt: bigint) => amt),
         dateCreated: token.dateCreated
       }
     } catch (err) {
@@ -406,11 +516,14 @@ export function useSupplyChain() {
           name: token.name,
           totalSupply: token.totalSupply,
           features: token.features,
-          parentId: token.parentId,
+          tokenType: Number(token.tokenType) as TokenType,
+          parentIds: token.parentIds.map((id: bigint) => id),
+          parentAmounts: token.parentAmounts.map((amt: bigint) => amt),
           dateCreated: token.dateCreated
         })
         
-        currentId = token.parentId
+        // Usar el primer parentId si existe para la jerarquía
+        currentId = token.parentIds.length > 0 ? token.parentIds[0] : BigInt(0)
       }
       
       return hierarchy

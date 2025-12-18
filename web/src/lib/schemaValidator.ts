@@ -82,8 +82,8 @@ export function validateFeatures(features: unknown): ValidationResult {
 
   const obj = features as Record<string, unknown>
 
-  // Validar campos requeridos según schema
-  const requiredFields = ['schema_version', 'type', 'labels']
+  // Validar campos requeridos según schema (type ya no es requerido, está en el contrato)
+  const requiredFields = ['schema_version', 'labels']
   for (const field of requiredFields) {
     if (!(field in obj)) {
       errors.push(`Campo requerido faltante: ${field}`)
@@ -95,10 +95,14 @@ export function validateFeatures(features: unknown): ValidationResult {
     errors.push('schema_version debe ser "1.0.0"')
   }
 
-  // Validar type
+  // Validar type (opcional, solo si está presente - el tipo ahora está en el contrato como tokenType)
   const validTypes = ['API_MP', 'BOM', 'PT_LOTE', 'SSCC', 'COMPLIANCE_LOG']
-  if (obj.type && !validTypes.includes(obj.type as string)) {
-    errors.push(`type inválido. Valores permitidos: ${validTypes.join(', ')}`)
+  if (obj.type) {
+    if (!validTypes.includes(obj.type as string)) {
+      errors.push(`type inválido. Valores permitidos: ${validTypes.join(', ')}`)
+    } else {
+      warnings.push('El campo "type" está presente pero ya no es requerido (el tipo se especifica en el contrato como tokenType)')
+    }
   }
 
   // Validar labels
@@ -113,7 +117,8 @@ export function validateFeatures(features: unknown): ValidationResult {
     }
   }
 
-  // Validaciones específicas por tipo
+  // Validaciones específicas por tipo (solo si type está presente en el JSON)
+  // Nota: Si type no está presente, estas validaciones se omiten ya que el tipo se especifica en el contrato
   if (obj.type && errors.length === 0) {
     validateTypeSpecificFields(obj.type as string, obj, errors, warnings)
   }
@@ -251,16 +256,20 @@ export function formatTypeWithDescription(type: string): string {
  * Soporta ambos formatos:
  * - Formato nuevo: parents.components (schema JSON)
  * - Formato antiguo: components (BomFeatures directo)
+ * @param features - Features JSON del token
+ * @param tokenType - Tipo del token desde el contrato (opcional, se usa si type no está en JSON)
  */
-export function extractBomComponentIds(features: unknown): number[] {
+export function extractBomComponentIds(features: unknown, tokenType?: string): number[] {
   if (!features || typeof features !== 'object') {
     console.log('[DEBUG] extractBomComponentIds: features no es objeto')
     return []
   }
   
   const obj = features as Record<string, unknown>
-  if (obj.type !== 'BOM') {
-    console.log('[DEBUG] extractBomComponentIds: tipo no es BOM', obj.type)
+  // Verificar tipo: primero en JSON (si existe), luego en parámetro del contrato
+  const type = obj.type as string | undefined || tokenType
+  if (type !== 'BOM') {
+    console.log('[DEBUG] extractBomComponentIds: tipo no es BOM', { typeFromJson: obj.type, typeFromContract: tokenType, finalType: type })
     return []
   }
   
@@ -298,12 +307,16 @@ export function extractBomComponentIds(features: unknown): number[] {
 
 /**
  * Extrae los IDs de contenido de un SSCC
+ * @param features - Features JSON del token
+ * @param tokenType - Tipo del token desde el contrato (opcional, se usa si type no está en JSON)
  */
-export function extractSsccContentIds(features: unknown): number[] {
+export function extractSsccContentIds(features: unknown, tokenType?: string): number[] {
   if (!features || typeof features !== 'object') return []
   
   const obj = features as Record<string, unknown>
-  if (obj.type !== 'SSCC') return []
+  // Verificar tipo: primero en JSON (si existe), luego en parámetro del contrato
+  const type = obj.type as string | undefined || tokenType
+  if (type !== 'SSCC') return []
   
   if (!obj.contents || !Array.isArray(obj.contents)) return []
   
@@ -314,11 +327,18 @@ export function extractSsccContentIds(features: unknown): number[] {
 
 /**
  * Verifica si un token es de tipo compliance
+ * @param features - Features JSON del token
+ * @param tokenType - Tipo del token desde el contrato (opcional, se usa si type no está en JSON)
  */
-export function isComplianceToken(features: unknown): boolean {
-  if (!features || typeof features !== 'object') return false
+export function isComplianceToken(features: unknown, tokenType?: string): boolean {
+  if (!features || typeof features !== 'object') {
+    // Si no hay features pero hay tokenType, usar el tokenType del contrato
+    return tokenType === 'COMPLIANCE_LOG'
+  }
   const obj = features as Record<string, unknown>
-  return obj.type === 'COMPLIANCE_LOG'
+  // Verificar tipo: primero en JSON (si existe), luego en parámetro del contrato
+  const type = obj.type as string | undefined || tokenType
+  return type === 'COMPLIANCE_LOG'
 }
 
 /**
@@ -327,4 +347,6 @@ export function isComplianceToken(features: unknown): boolean {
 export function getSchemaVersion() {
   return '1.0.0'
 }
+
+
 

@@ -4,11 +4,11 @@ import { useState, useEffect, useCallback } from 'react'
 import { useWeb3 } from '@/contexts/Web3Context'
 import { useSupplyChain } from '@/hooks/useSupplyChain'
 import { 
-  TokenType, 
+  TokenType as PharmaTokenType, 
   ComplianceLogType,
   TOKEN_TYPE_OPTIONS
 } from '@/types/pharma'
-import { Token } from '@/contracts/SupplyChain'
+import { Token, TokenType as ContractTokenType, tokenTypeStringToNumber } from '@/contracts/SupplyChain'
 import {
   buildApiMpFeatures,
   buildBomFeatures,
@@ -43,11 +43,11 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
   const { createToken, getUserTokens, getToken, isLoading, error, clearError } = useSupplyChain()
 
   const [step, setStep] = useState<WizardStep>('select-type')
-  const [selectedType, setSelectedType] = useState<TokenType | null>(null)
+  const [selectedType, setSelectedType] = useState<PharmaTokenType | null>(null)
   const [featuresJson, setFeaturesJson] = useState<string>('')
   const [tokenName, setTokenName] = useState('')
   const [totalSupply, setTotalSupply] = useState(1)
-  const [parentId, setParentId] = useState(0)
+  const [parentIds, setParentIds] = useState<{ tokenId: bigint; amount: bigint }[]>([])
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [success, setSuccess] = useState(false)
 
@@ -78,72 +78,86 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     loadUserTokens()
   }, [loadUserTokens])
 
-  // Filtrar tokens por tipo (basado en features)
-  const filterTokensByType = (type: string): Token[] => {
-    return userTokens.filter(t => {
-      try {
-        const features = JSON.parse(t.features)
-        return features.type === type
-      } catch {
-        return false
-      }
-    })
+  // Filtrar tokens por tipo (basado en tokenType del contrato)
+  const filterTokensByType = (type: PharmaTokenType): Token[] => {
+    const contractType = tokenTypeStringToNumber(type)
+    return userTokens.filter(t => t.tokenType === contractType)
   }
 
-  const handleSelectType = (type: TokenType) => {
+  // Agregar un padre a la lista
+  const addParent = () => {
+    setParentIds([...parentIds, { tokenId: BigInt(0), amount: BigInt(0) }])
+  }
+
+  // Remover un padre de la lista
+  const removeParent = (index: number) => {
+    setParentIds(parentIds.filter((_, i) => i !== index))
+  }
+
+  // Actualizar un padre en la lista
+  const updateParent = (index: number, field: 'tokenId' | 'amount', value: bigint) => {
+    const updated = [...parentIds]
+    updated[index] = { ...updated[index], [field]: value }
+    setParentIds(updated)
+  }
+
+  const handleSelectType = (type: PharmaTokenType) => {
     setSelectedType(type)
     setStep('fill-form')
     clearError()
     setValidationErrors([])
+    setParentIds([]) // Resetear padres al cambiar tipo
     
     // Establecer supply por defecto según tipo
     const option = TOKEN_TYPE_OPTIONS.find(o => o.value === type)
     setTotalSupply(option?.supplyDefault || 1)
   }
 
-  const handleFormSubmit = (data: unknown, type: TokenType, logType?: ComplianceLogType) => {
+  const handleFormSubmit = (data: unknown, type: PharmaTokenType, logType?: ComplianceLogType) => {
     let result: { success: boolean; json?: string; errors: string[] }
 
     switch (type) {
-      case TokenType.API_MP:
+      case PharmaTokenType.API_MP:
         result = buildApiMpFeatures(data as ApiMpBuilderInput)
         if (result.success) setTokenName(`API: ${(data as ApiMpBuilderInput).substanceName}`)
         break
-      case TokenType.BOM:
+      case PharmaTokenType.BOM:
         result = buildBomFeatures(data as BomBuilderInput)
         if (result.success) setTokenName(`BOM: ${(data as BomBuilderInput).productName}`)
         break
-      case TokenType.PT_LOTE:
+      case PharmaTokenType.PT_LOTE:
         result = buildPtLoteFeatures(data as PtLoteBuilderInput)
         if (result.success) {
           setTokenName(`PT: ${(data as PtLoteBuilderInput).productName} - ${(data as PtLoteBuilderInput).batchNumber}`)
-          // Si tiene BOM asociado, usar como parentId
+          // Si tiene BOM asociado, agregar como padre con cantidad 1
           const ptData = data as PtLoteBuilderInput
-          if (ptData.bomTokenId) setParentId(ptData.bomTokenId)
+          if (ptData.bomTokenId) {
+            setParentIds([{ tokenId: BigInt(ptData.bomTokenId), amount: BigInt(1) }])
+          }
         }
         break
-      case TokenType.SSCC:
+      case PharmaTokenType.SSCC:
         result = buildSsccFeatures(data as SsccBuilderInput)
         if (result.success) setTokenName(`SSCC: ${(data as SsccBuilderInput).sscc}`)
         break
-      case TokenType.COMPLIANCE_LOG:
+      case PharmaTokenType.COMPLIANCE_LOG:
         if (logType === ComplianceLogType.TEMP_LOG) {
           result = buildTempLogFeatures(data as TempLogBuilderInput)
           if (result.success) {
             setTokenName(`TempLog: SSCC#${(data as TempLogBuilderInput).ssccTokenId}`)
-            setParentId((data as TempLogBuilderInput).ssccTokenId)
+            setParentIds([{ tokenId: BigInt((data as TempLogBuilderInput).ssccTokenId), amount: BigInt(1) }])
           }
         } else if (logType === ComplianceLogType.CAPA) {
           result = buildCapaFeatures(data as CapaBuilderInput)
           if (result.success) {
             setTokenName(`CAPA: ${(data as CapaBuilderInput).capaId}`)
-            setParentId((data as CapaBuilderInput).ssccTokenId)
+            setParentIds([{ tokenId: BigInt((data as CapaBuilderInput).ssccTokenId), amount: BigInt(1) }])
           }
         } else if (logType === ComplianceLogType.RECALL) {
           result = buildRecallFeatures(data as RecallBuilderInput)
           if (result.success) {
             setTokenName(`Recall: ${(data as RecallBuilderInput).recallId}`)
-            setParentId((data as RecallBuilderInput).ptLoteTokenId)
+            setParentIds([{ tokenId: BigInt((data as RecallBuilderInput).ptLoteTokenId), amount: BigInt(1) }])
           }
         } else {
           result = { success: false, errors: ['Tipo de log no soportado'] }
@@ -181,16 +195,42 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     
     // Validar que tenga los campos mínimos requeridos
     const parsed = JSON.parse(featuresJson)
-    if (!parsed.type || !parsed.labels || !parsed.labels.display_name) {
-      setValidationErrors(['El JSON de features debe incluir: type, labels.display_name'])
+    if (!parsed.labels || !parsed.labels.display_name) {
+      setValidationErrors(['El JSON de features debe incluir: labels.display_name'])
       return
     }
+
+    if (!selectedType) {
+      setValidationErrors(['Debes seleccionar un tipo de token'])
+      return
+    }
+    
+    // Convertir parentIds y parentAmounts a arrays (filtrar los que tienen tokenId = 0)
+    const validParents = parentIds.filter(p => p.tokenId > BigInt(0))
+    const parentIdsArray = validParents.map(p => p.tokenId)
+    const parentAmountsArray = validParents.map(p => p.amount)
+
+    // Asegurar que sean arrays (no undefined/null)
+    const safeParentIds = Array.isArray(parentIdsArray) ? parentIdsArray : []
+    const safeParentAmounts = Array.isArray(parentAmountsArray) ? parentAmountsArray : []
+
+    const contractTokenType = tokenTypeStringToNumber(selectedType)
+    
+    console.log('[DEBUG] CreateTokenWizard - createToken:', {
+      tokenName,
+      totalSupply,
+      tokenType: contractTokenType,
+      parentIdsLength: safeParentIds.length,
+      parentAmountsLength: safeParentAmounts.length
+    })
     
     const success = await createToken(
       tokenName,
       BigInt(totalSupply),
       featuresJson,
-      BigInt(parentId)
+      contractTokenType,
+      safeParentIds,
+      safeParentAmounts
     )
 
     if (success) {
@@ -208,7 +248,7 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     setFeaturesJson('')
     setTokenName('')
     setTotalSupply(1)
-    setParentId(0)
+    setParentIds([])
     setValidationErrors([])
     setSuccess(false)
     clearError()
@@ -216,44 +256,44 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
 
   const renderForm = () => {
     switch (selectedType) {
-      case TokenType.API_MP:
+      case PharmaTokenType.API_MP:
         return (
           <ApiMpForm 
-            onSubmit={(data) => handleFormSubmit(data, TokenType.API_MP)}
+            onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.API_MP)}
             isLoading={isLoading}
           />
         )
-      case TokenType.BOM:
+      case PharmaTokenType.BOM:
         return (
           <BomForm 
-            onSubmit={(data) => handleFormSubmit(data, TokenType.BOM)}
+            onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.BOM)}
             isLoading={isLoading}
-            availableTokens={filterTokensByType(TokenType.API_MP)}
+            availableTokens={filterTokensByType(PharmaTokenType.API_MP)}
           />
         )
-      case TokenType.PT_LOTE:
+      case PharmaTokenType.PT_LOTE:
         return (
           <PtLoteForm 
-            onSubmit={(data) => handleFormSubmit(data, TokenType.PT_LOTE)}
+            onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.PT_LOTE)}
             isLoading={isLoading}
-            availableBoms={filterTokensByType(TokenType.BOM)}
+            availableBoms={filterTokensByType(PharmaTokenType.BOM)}
           />
         )
-      case TokenType.SSCC:
+      case PharmaTokenType.SSCC:
         return (
           <SsccForm 
-            onSubmit={(data) => handleFormSubmit(data, TokenType.SSCC)}
+            onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.SSCC)}
             isLoading={isLoading}
-            availablePtLotes={filterTokensByType(TokenType.PT_LOTE)}
+            availablePtLotes={filterTokensByType(PharmaTokenType.PT_LOTE)}
           />
         )
-      case TokenType.COMPLIANCE_LOG:
+      case PharmaTokenType.COMPLIANCE_LOG:
         return (
           <ComplianceLogForm 
-            onSubmit={(data, logType) => handleFormSubmit(data, TokenType.COMPLIANCE_LOG, logType)}
+            onSubmit={(data, logType) => handleFormSubmit(data, PharmaTokenType.COMPLIANCE_LOG, logType)}
             isLoading={isLoading}
-            availableSsccs={filterTokensByType(TokenType.SSCC)}
-            availablePtLotes={filterTokensByType(TokenType.PT_LOTE)}
+            availableSsccs={filterTokensByType(PharmaTokenType.SSCC)}
+            availablePtLotes={filterTokensByType(PharmaTokenType.PT_LOTE)}
           />
         )
       default:
@@ -393,15 +433,58 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
                 />
               </div>
               <div className="p-4 bg-surface-50 rounded-xl">
-                <p className="text-sm text-surface-500">Parent ID</p>
-                <input
-                  type="number"
-                  value={parentId}
-                  onChange={(e) => setParentId(Number(e.target.value))}
-                  className="input-field mt-1"
-                  min="0"
-                />
-                <p className="text-xs text-surface-400 mt-1">0 = sin padre</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm text-surface-500">Padres (Opcional)</p>
+                  <button
+                    type="button"
+                    onClick={addParent}
+                    className="text-xs text-primary-600 hover:text-primary-800 font-semibold"
+                  >
+                    + Agregar Padre
+                  </button>
+                </div>
+                {parentIds.length === 0 ? (
+                  <p className="text-xs text-surface-400">Sin padres</p>
+                ) : (
+                  <div className="space-y-2">
+                    {parentIds.map((parent, index) => (
+                      <div key={index} className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-surface-400">Token Padre</label>
+                          <select
+                            value={parent.tokenId.toString()}
+                            onChange={(e) => updateParent(index, 'tokenId', BigInt(e.target.value))}
+                            className="input-field mt-1 text-sm"
+                          >
+                            <option value="0">Seleccionar...</option>
+                            {userTokens.map((token) => (
+                              <option key={token.id.toString()} value={token.id.toString()}>
+                                #{token.id.toString()} - {token.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-24">
+                          <label className="text-xs text-surface-400">Cantidad</label>
+                          <input
+                            type="number"
+                            value={parent.amount.toString()}
+                            onChange={(e) => updateParent(index, 'amount', BigInt(e.target.value || '0'))}
+                            className="input-field mt-1 text-sm"
+                            min="1"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeParent(index)}
+                          className="text-red-600 hover:text-red-800 text-sm font-semibold px-2 py-1"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -481,7 +564,9 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
             <ul className="mt-2 space-y-1 text-sm">
               <li><strong>Tipo:</strong> {String(selectedType)}</li>
               <li><strong>Supply:</strong> {totalSupply}</li>
-              <li><strong>Parent ID:</strong> {parentId || 'Ninguno'}</li>
+              <li><strong>Padres:</strong> {parentIds.length > 0 
+                ? parentIds.map((p, i) => `#${p.tokenId} (${p.amount})`).join(', ')
+                : 'Ninguno'}</li>
             </ul>
           </div>
 

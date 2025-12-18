@@ -156,13 +156,13 @@ Abrir http://localhost:3000
 | 👑 Admin | Administrador | Aprobar usuarios, transferir a cualquier rol |
 
 ### Tipos de Token Pharma
-| Tipo | Descripción | Ejemplo |
-|------|-------------|---------|
-| API_MP | Materia Prima / API | Paracetamol USP |
-| BOM | Bill of Materials | Receta del producto |
-| PT_LOTE | Producto Terminado | Lote de comprimidos |
-| SSCC | Unidad Logística | Pallet con productos |
-| COMPLIANCE_LOG | Registros | TempLog, CAPA, Recall |
+| Tipo | Descripción | Ejemplo | Notas |
+|------|-------------|---------|-------|
+| API_MP | Materia Prima / API | Paracetamol USP | Puede tener múltiples padres opcionales |
+| BOM | Bill of Materials | Receta del producto | Define componentes y cantidades necesarias |
+| PT_LOTE | Producto Terminado | Lote de comprimidos | **Requiere exactamente un padre (receta/BOM). Descuenta automáticamente los componentes de la receta al crear el lote** |
+| SSCC | Unidad Logística | Pallet con productos | Puede tener múltiples padres opcionales |
+| COMPLIANCE_LOG | Registros | TempLog, CAPA, Recall | Puede tener múltiples padres opcionales |
 
 ### Páginas
 
@@ -180,6 +180,11 @@ Landing page con información del proyecto.
 #### 📦 Productos (`/products`)
 - Lista de tokens propios
 - Crear tokens (formulario simple con validación JSON obligatoria)
+- **Selección de tipo de token** y **múltiples padres con cantidades**
+- **Validaciones mejoradas para PT_LOTE**:
+  - Debe tener exactamente un padre (receta/BOM)
+  - Verificación previa de componentes suficientes antes de crear el lote
+  - Mensajes descriptivos si faltan componentes
 - **Transferir tokens con combobox de destinatarios filtrado por rol según cadena de suministro**
 - **Validación de balance con popup de error**
 - **Restricciones por rol**: Consumidores solo pueden ver sus tokens (sin crear ni transferir)
@@ -221,7 +226,7 @@ forge test -vvv
 forge coverage
 ```
 
-### Tests incluidos (50 tests)
+### Tests incluidos (55 tests)
 - Gestión de usuarios (7 tests)
 - Creación de tokens (8 tests)
 - Transferencias (8 tests)
@@ -230,6 +235,12 @@ forge coverage
 - Eventos (6 tests)
 - Flujos completos (3 tests)
 - Tests de robustez (7 tests)
+- **Descuento de supply para PT_LOTE (5 tests)**:
+  - Consumo correcto de componentes
+  - Validación de componentes insuficientes
+  - Validación de padre BOM requerido
+  - Validación de padre único requerido
+  - Consumo de múltiples componentes
 
 ## 🔐 Cuenta Admin
 
@@ -255,7 +266,35 @@ Todas las validaciones incluyen verificación de dígito de control (Modulo 10).
 - **Validación por tipo**: Reglas específicas según el tipo de token (API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG)
 - **Feedback visual**: Indicadores de validación en el formulario de creación
 
-## ✨ Mejoras Recientes (Diciembre 2024)
+## 🆕 Sistema de Múltiples Padres y Descuento de Supply (Diciembre 2024)
+
+### Cambios en el Contrato
+- ✅ **Enum TokenType**: Tipos de token definidos a nivel de contrato (API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG)
+- ✅ **Múltiples padres**: Tokens pueden tener múltiples padres con cantidades asociadas (`parentIds[]` y `parentAmounts[]`)
+- ✅ **Descuento automático de supply**: Al crear un PT_LOTE:
+  - Valida que tenga exactamente un padre que sea una receta (BOM)
+  - Calcula componentes necesarios: `cantidadPorUnidad * cantidadLote`
+  - Verifica balances suficientes de todos los componentes
+  - Descuenta automáticamente los componentes del balance del creador
+  - Revierte con mensaje descriptivo si algún componente es insuficiente
+
+### Cambios en Frontend
+- ✅ **Selector de tipo de token** visible en formularios
+- ✅ **Múltiples padres con cantidades**: UI mejorada para agregar/remover padres dinámicamente
+- ✅ **Validaciones previas**: Verifica componentes suficientes antes de enviar transacción
+- ✅ **Mensajes de error descriptivos**: Indica específicamente qué componente falta y cuánto se necesita
+- ✅ **Schema JSON actualizado**: Campo `type` removido (ahora es parte del contrato)
+
+## ✨ Mejoras Recientes (Diciembre 2024 - Enero 2025)
+
+### Sistema de Múltiples Padres y Descuento de Supply
+- ✅ **Sistema de múltiples padres**: Tokens ahora pueden tener múltiples padres con cantidades asociadas (`parentIds[]`, `parentAmounts[]`)
+- ✅ **Enum TokenType**: Tipo de token ahora es un parámetro directo del contrato
+- ✅ **Descuento automático de supply**: Al crear un lote (PT_LOTE), el sistema valida y descuenta automáticamente los componentes de la receta
+- ✅ **Validación de componentes**: Verificación previa de componentes disponibles antes de crear el lote
+- ✅ **Mensajes de error descriptivos**: Feedback claro cuando faltan componentes o cuando la validación falla
+
+### Validaciones y UX (Diciembre 2024)
 
 ### Validaciones y UX
 - ✅ **Validación JSON obligatoria** al crear tokens (campo requerido con validación completa)
@@ -284,6 +323,8 @@ Todas las validaciones incluyen verificación de dígito de control (Modulo 10).
 ### Correcciones Técnicas
 - ✅ Corrección de comparación de estado de usuario en `getUsersByRole`
 - ✅ Corrección de estructura JSON de BOM para visualización correcta de componentes
+- ✅ Mejora del parsing de errores del contrato para mostrar mensajes descriptivos
+- ✅ Validaciones mejoradas en frontend antes de enviar transacciones
 
 ## 🗂️ Documentación Adicional
 
@@ -296,5 +337,56 @@ MIT
 
 ---
 
+## 📊 Arquitectura del Contrato
+
+### Estructura de Token
+```solidity
+struct Token {
+    uint256 id;
+    address creator;
+    string name;
+    uint256 totalSupply;
+    string features;          // JSON string con características
+    TokenType tokenType;      // Enum: API_MP, BOM, PT_LOTE, SSCC, COMPLIANCE_LOG
+    uint256[] parentIds;      // IDs de tokens padres
+    uint256[] parentAmounts;  // Cantidades de cada padre
+    uint256 dateCreated;
+}
+```
+
+### Flujo de Creación de Lote (PT_LOTE)
+1. Usuario selecciona receta (BOM) como padre único
+2. Especifica cantidad de unidades del lote
+3. Frontend valida:
+   - Que tenga exactamente un padre
+   - Que el padre sea una receta (BOM)
+   - Que haya suficientes componentes disponibles
+4. Contrato valida y descuenta componentes automáticamente
+
+---
+
+## 🔄 Sistema de Descuento de Supply para Lotes
+
+Cuando se crea un lote (PT_LOTE) que tiene como padre una receta (BOM):
+
+1. **Validación automática**: El sistema verifica que hay suficientes componentes disponibles
+2. **Cálculo de necesidades**: Para cada componente, calcula `cantidadNecesaria = cantidadPorUnidad * cantidadLote`
+3. **Verificación de balances**: Comprueba que el balance disponible sea suficiente para todos los componentes
+4. **Descuento automático**: Si todo está bien, descuenta los balances de todos los componentes automáticamente
+5. **Mensajes descriptivos**: Si falta algún componente, muestra exactamente qué componente falta y cuánto se necesita
+
+### Ejemplo
+Si una receta requiere:
+- 10 unidades de Componente A por unidad de producto
+- 5 unidades de Componente B por unidad de producto
+
+Y quieres crear un lote de 100 unidades:
+- Necesitarás: 1000 unidades de A y 500 unidades de B
+- El sistema verificará que tengas estos balances disponibles
+- Si faltan, mostrará un mensaje claro indicando qué falta
+- Si todo está bien, descontará automáticamente 1000 de A y 500 de B de tus balances
+
+---
+
 *Desarrollado con asistencia de Claude (Anthropic) en Cursor IDE*
-*Última actualización: Diciembre 2024*
+*Última actualización: Enero 2025*
