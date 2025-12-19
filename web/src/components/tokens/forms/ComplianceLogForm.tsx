@@ -19,7 +19,7 @@ import {
 type ComplianceLogData = TempLogBuilderInput | CapaBuilderInput | RecallBuilderInput
 
 interface ComplianceLogFormProps {
-  onSubmit: (data: ComplianceLogData, logType: ComplianceLogType) => void
+  onSubmit: (data: ComplianceLogData, logType: ComplianceLogType, isRecall?: boolean) => void
   isLoading?: boolean
   availableSsccs?: Token[]
   availablePtLotes?: Token[]
@@ -97,19 +97,20 @@ export function ComplianceLogForm({
 
   const [newRecallBatch, setNewRecallBatch] = useState('')
   const [newRegion, setNewRegion] = useState('')
+  const [isRecall, setIsRecall] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     
     switch (logType) {
       case ComplianceLogType.TEMP_LOG:
-        onSubmit(tempLogData, logType)
+        onSubmit(tempLogData, logType, false)
         break
       case ComplianceLogType.CAPA:
-        onSubmit(capaData, logType)
+        onSubmit(capaData, logType, false)
         break
       case ComplianceLogType.RECALL:
-        onSubmit(recallData, logType)
+        onSubmit(recallData, logType, isRecall)
         break
     }
   }
@@ -505,6 +506,26 @@ export function ComplianceLogForm({
         <>
           <div className="bg-surface-50 rounded-xl p-4">
             <h3 className="text-lg font-semibold text-surface-800 mb-4">🚨 Información del Recall</h3>
+            
+            {/* Checkbox Recall */}
+            <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isRecall}
+                  onChange={(e) => setIsRecall(e.target.checked)}
+                  className="w-5 h-5 rounded border-yellow-300 text-primary-600 focus:ring-yellow-500"
+                />
+                <div>
+                  <span className="font-semibold text-yellow-900">Marcar como Recall</span>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    Al marcar esta opción, se retirará toda la cadena de suministro relacionada al token padre. 
+                    Esto afectará a todos los tokens relacionados (padres e hijos) y no permitirá su transferencia 
+                    ni la creación de nuevos tokens relacionados.
+                  </p>
+                </div>
+              </label>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="label">PT_LOTE Token *</label>

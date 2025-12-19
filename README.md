@@ -161,8 +161,8 @@ Abrir http://localhost:3000
 | API_MP | Materia Prima / API | Paracetamol USP | Puede tener múltiples padres opcionales |
 | BOM | Bill of Materials | Receta del producto | Define componentes y cantidades necesarias |
 | PT_LOTE | Producto Terminado | Lote de comprimidos | **Requiere exactamente un padre (receta/BOM). Descuenta automáticamente los componentes de la receta al crear el lote** |
-| SSCC | Unidad Logística | Pallet con productos | Puede tener múltiples padres opcionales |
-| COMPLIANCE_LOG | Registros | TempLog, CAPA, Recall | Puede tener múltiples padres opcionales |
+| SSCC | Unidad Logística | Pallet con productos | **Requiere exactamente un padre (PT_LOTE). Descuenta automáticamente unidades del lote al crear la unidad logística** |
+| COMPLIANCE_LOG | Registros | TempLog, CAPA, Recall | Puede tener múltiples padres opcionales. **Puede marcar recall para retirar productos del mercado** |
 
 ### Páginas
 
@@ -174,19 +174,25 @@ Landing page con información del proyecto.
   - **Admin**: Total Tokens, Total Usuarios, Total Transferencias, Mi Estado
   - **Fabricante/Distribuidor/Retailer**: Mis Tokens, Transferencias Enviadas, Transferencias Recibidas, Mi Estado
   - **Consumidor**: Mis Tokens, Transferencias Recibidas, Mi Estado
-- Tokens del usuario
+- Tokens del usuario con **indicador de "Retirado"** si están en recall
+- **Icono de información para consumidores** sobre productos retirados
 - Transferencias pendientes
 
 #### 📦 Productos (`/products`)
-- Lista de tokens propios
+- Lista de tokens propios con **indicador de "Retirado"** si están en recall
 - Crear tokens (formulario simple con validación JSON obligatoria)
 - **Selección de tipo de token** y **múltiples padres con cantidades**
+- **Checkbox de Recall** para tokens COMPLIANCE_LOG:
+  - Solo visible cuando el tipo seleccionado es COMPLIANCE_LOG
+  - **Popup de advertencia** antes de crear token con recall
+  - Explica que se retirará toda la cadena de suministro relacionada
 - **Validaciones mejoradas para PT_LOTE**:
   - Debe tener exactamente un padre (receta/BOM)
   - Verificación previa de componentes suficientes antes de crear el lote
   - Mensajes descriptivos si faltan componentes
 - **Transferir tokens con combobox de destinatarios filtrado por rol según cadena de suministro**
 - **Validación de balance con popup de error**
+- **Restricción de transferencia**: No se pueden transferir tokens retirados (recall)
 - **Restricciones por rol**: Consumidores solo pueden ver sus tokens (sin crear ni transferir)
 
 #### ➕ Crear Token (`/tokens/create`)
@@ -199,10 +205,14 @@ Wizard multi-paso para crear tokens farmacéuticos:
 #### 🔍 Trazabilidad (`/track`)
 Vista completa de un token:
 - **Información**: Detalles y características con descripción de tipos
+  - **Indicador de "Retirado"** si el token está en recall
+  - **Icono de información para consumidores** con explicación sobre productos retirados
 - **Jerarquía**: 
   - Árbol visual de tokens padre
+  - **Todos los padres de un BOM se muestran en el mismo nivel** (BFS)
   - **Componentes BOM mostrados como sub-nivel bajo cada BOM** (materias primas)
   - **Tokens compliance como sub-nivel** (morado)
+  - **Indicador de "Retirado"** en cada item de la jerarquía
 - **Transferencias**: Timeline cronológico con perfil de cuentas
 - **Botón "Volver"** según historial de navegación
 
@@ -241,6 +251,10 @@ forge coverage
   - Validación de padre BOM requerido
   - Validación de padre único requerido
   - Consumo de múltiples componentes
+- **Sistema de Recall (tests incluidos en creación de tokens)**:
+  - Validación de recall solo para COMPLIANCE_LOG
+  - Validación de padre único para recall
+  - Marcado de cadena de suministro como retirada
 
 ## 🔐 Cuenta Admin
 
@@ -351,6 +365,7 @@ struct Token {
     uint256[] parentIds;      // IDs de tokens padres
     uint256[] parentAmounts;  // Cantidades de cada padre
     uint256 dateCreated;
+    bool recall;              // Indica si el token está retirado (recall)
 }
 ```
 
@@ -385,6 +400,40 @@ Y quieres crear un lote de 100 unidades:
 - El sistema verificará que tengas estos balances disponibles
 - Si faltan, mostrará un mensaje claro indicando qué falta
 - Si todo está bien, descontará automáticamente 1000 de A y 500 de B de tus balances
+
+---
+
+## 🚨 Sistema de Recall (Retiro de Productos) - Enero 2025
+
+### Funcionalidad de Recall
+El sistema permite marcar productos como retirados del mercado (recall) cuando se detectan problemas de calidad o seguridad.
+
+#### Características
+- **Campo `recall` en struct Token**: Indica si un token está retirado del mercado
+- **Solo para COMPLIANCE_LOG**: El recall solo puede aplicarse a tokens de tipo COMPLIANCE_LOG
+- **Requiere exactamente un padre**: Un recall debe tener exactamente un token padre
+- **Marcado de cadena completa**: Al crear un recall, se marca toda la cadena de suministro relacionada como retirada
+- **Bloqueo de transferencias**: Los tokens retirados no pueden ser transferidos
+- **Bloqueo de uso como padre**: Los tokens retirados no pueden usarse como padres en la creación de nuevos tokens
+
+#### Interfaz de Usuario
+- **Checkbox de Recall**: Visible solo cuando se selecciona tipo COMPLIANCE_LOG en la creación de tokens
+- **Popup de advertencia**: Al intentar crear un token con recall, se muestra un popup explicando las consecuencias
+- **Indicador visual "Retirado"**: Badge rojo en todas las vistas donde se muestran tokens:
+  - Dashboard (lista de tokens)
+  - Página de productos (lista de tokens)
+  - Vista de información del token
+  - Árbol de jerarquía
+- **Icono de información para consumidores**: 
+  - Aparece junto al badge "Retirado" solo para usuarios con rol consumidor
+  - Al hacer clic, muestra un popup con:
+    - Explicación clara pero no alarmista
+    - Pasos a seguir para el consumidor
+    - Instrucciones sobre qué hacer con el producto retirado
+
+#### Mejoras en Jerarquía
+- **Visualización de múltiples padres**: Todos los padres de un BOM se muestran en el mismo nivel usando BFS (Breadth-First Search)
+- **Indicadores visuales**: Muestra cuando hay múltiples padres en el mismo nivel
 
 ---
 

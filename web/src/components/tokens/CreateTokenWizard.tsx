@@ -40,20 +40,23 @@ interface CreateTokenWizardProps {
 
 export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProps) {
   const { account } = useWeb3()
-  const { createToken, getUserTokens, getToken, isLoading, error, clearError } = useSupplyChain()
+  const { createToken, getUserTokens, getToken, getTokenBalance, isLoading, error, clearError } = useSupplyChain()
 
   const [step, setStep] = useState<WizardStep>('select-type')
   const [selectedType, setSelectedType] = useState<PharmaTokenType | null>(null)
   const [featuresJson, setFeaturesJson] = useState<string>('')
   const [tokenName, setTokenName] = useState('')
   const [totalSupply, setTotalSupply] = useState(1)
-  const [parentIds, setParentIds] = useState<{ tokenId: bigint; amount: bigint }[]>([])
+  const [parentIds, setParentIds] = useState<{ tokenId: bigint; amount: bigint; balance?: bigint }[]>([])
   const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [success, setSuccess] = useState(false)
+  const [isRecall, setIsRecall] = useState(false)
+  const [showRecallWarning, setShowRecallWarning] = useState(false)
 
   // Tokens disponibles para referencias
   const [userTokens, setUserTokens] = useState<Token[]>([])
   const [loadingTokens, setLoadingTokens] = useState(false)
+  const [loadingBalances, setLoadingBalances] = useState(false)
 
   // Cargar tokens del usuario para referencias
   const loadUserTokens = useCallback(async () => {
@@ -84,9 +87,126 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     return userTokens.filter(t => t.tokenType === contractType)
   }
 
+  // Obtener tokens padres disponibles según el tipo de token
+  const getAvailableParentTokens = (): Token[] => {
+    if (!selectedType) return []
+    
+    let available: Token[] = []
+    
+    switch (selectedType) {
+      case PharmaTokenType.BOM:
+        // Receta: solo materias primas
+        available = filterTokensByType(PharmaTokenType.API_MP)
+        break
+      case PharmaTokenType.PT_LOTE:
+        // Lote: solo recetas
+        available = filterTokensByType(PharmaTokenType.BOM)
+        break
+      case PharmaTokenType.SSCC:
+        // Unidad lógica: solo lotes
+        available = filterTokensByType(PharmaTokenType.PT_LOTE)
+        break
+      case PharmaTokenType.COMPLIANCE_LOG:
+        // Compliance log: lotes y unidades lógicas
+        available = [
+          ...filterTokensByType(PharmaTokenType.PT_LOTE),
+          ...filterTokensByType(PharmaTokenType.SSCC)
+        ]
+        break
+      default:
+        return []
+    }
+    
+    // Filtrar tokens con recall=true (no se pueden usar como padres)
+    return available.filter(token => !token.recall)
+  }
+
+  // Verificar si se pueden agregar padres según el tipo
+  const canAddParents = (): boolean => {
+    if (!selectedType) return false
+    
+    switch (selectedType) {
+      case PharmaTokenType.API_MP:
+        return false // Materia prima no tiene padres
+      case PharmaTokenType.BOM:
+        return true // Receta puede tener múltiples padres
+      case PharmaTokenType.PT_LOTE:
+        return parentIds.length === 0 // Lote solo un padre
+      case PharmaTokenType.SSCC:
+        return parentIds.length === 0 // Unidad lógica solo un padre
+      case PharmaTokenType.COMPLIANCE_LOG:
+        return parentIds.length === 0 // Compliance log solo un padre
+      default:
+        return false
+    }
+  }
+
+  // Verificar si se pueden agregar múltiples padres
+  const canAddMultipleParents = (): boolean => {
+    return selectedType === PharmaTokenType.BOM
+  }
+
+  // Verificar si la cantidad total es editable
+  const isTotalSupplyEditable = (): boolean => {
+    if (!selectedType) return true
+    return selectedType !== PharmaTokenType.BOM && selectedType !== PharmaTokenType.COMPLIANCE_LOG
+  }
+
+  // Verificar si el monto del padre es editable
+  const isParentAmountEditable = (index: number): boolean => {
+    if (!selectedType) return true
+    
+    switch (selectedType) {
+      case PharmaTokenType.PT_LOTE:
+        return false // Lote: monto siempre 1
+      case PharmaTokenType.COMPLIANCE_LOG:
+        return false // Compliance log: monto = balance
+      case PharmaTokenType.SSCC:
+        return true // Unidad lógica: monto editable pero <= balance
+      default:
+        return true
+    }
+  }
+
+  // Cargar balance de un token padre
+  const loadParentBalance = useCallback(async (tokenId: bigint, index: number) => {
+    if (!account || !tokenId || tokenId === BigInt(0)) return
+    
+    setLoadingBalances(true)
+    try {
+      const balance = await getTokenBalance(tokenId, account)
+      setParentIds(prev => {
+        const updated = [...prev]
+        updated[index] = { ...updated[index], balance }
+        
+        // Si es COMPLIANCE_LOG, establecer el monto automáticamente al balance
+        if (selectedType === PharmaTokenType.COMPLIANCE_LOG) {
+          updated[index].amount = balance
+        } else if (selectedType === PharmaTokenType.PT_LOTE) {
+          updated[index].amount = BigInt(1)
+        }
+        
+        return updated
+      })
+    } catch (err) {
+      console.error('Error cargando balance:', err)
+    } finally {
+      setLoadingBalances(false)
+    }
+  }, [account, getTokenBalance, selectedType])
+
   // Agregar un padre a la lista
   const addParent = () => {
-    setParentIds([...parentIds, { tokenId: BigInt(0), amount: BigInt(0) }])
+    if (!canAddParents()) return
+    
+    const newParent = { tokenId: BigInt(0), amount: BigInt(0) }
+    
+    // Si es PT_LOTE, establecer monto en 1
+    if (selectedType === PharmaTokenType.PT_LOTE) {
+      newParent.amount = BigInt(1)
+    }
+    
+    setParentIds([...parentIds, newParent])
   }
 
   // Remover un padre de la lista
@@ -95,10 +215,24 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
   }
 
   // Actualizar un padre en la lista
-  const updateParent = (index: number, field: 'tokenId' | 'amount', value: bigint) => {
-    const updated = [...parentIds]
-    updated[index] = { ...updated[index], [field]: value }
-    setParentIds(updated)
+  const updateParent = async (index: number, field: 'tokenId' | 'amount', value: bigint) => {
+    // Si se cambió el tokenId, cargar balance primero
+    if (field === 'tokenId' && value > BigInt(0)) {
+      await loadParentBalance(value, index)
+    } else {
+      // Actualizar directamente
+      setParentIds(prev => {
+        const updated = [...prev]
+        updated[index] = { ...updated[index], [field]: value }
+        
+        // Si es PT_LOTE, forzar monto a 1
+        if (selectedType === PharmaTokenType.PT_LOTE && field === 'tokenId') {
+          updated[index].amount = BigInt(1)
+        }
+        
+        return updated
+      })
+    }
   }
 
   const handleSelectType = (type: PharmaTokenType) => {
@@ -107,13 +241,22 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     clearError()
     setValidationErrors([])
     setParentIds([]) // Resetear padres al cambiar tipo
+    setFeaturesJson('') // Limpiar features JSON
+    setTokenName('') // Limpiar nombre del token
+    setIsRecall(false) // Resetear recall
+    setShowRecallWarning(false) // Resetear warning
     
     // Establecer supply por defecto según tipo
-    const option = TOKEN_TYPE_OPTIONS.find(o => o.value === type)
-    setTotalSupply(option?.supplyDefault || 1)
+    // BOM y COMPLIANCE_LOG siempre tienen supply = 1
+    if (type === PharmaTokenType.BOM || type === PharmaTokenType.COMPLIANCE_LOG) {
+      setTotalSupply(1)
+    } else {
+      const option = TOKEN_TYPE_OPTIONS.find(o => o.value === type)
+      setTotalSupply(option?.supplyDefault || 1)
+    }
   }
 
-  const handleFormSubmit = (data: unknown, type: PharmaTokenType, logType?: ComplianceLogType) => {
+  const handleFormSubmit = (data: unknown, type: PharmaTokenType, logType?: ComplianceLogType, recallFlag?: boolean) => {
     let result: { success: boolean; json?: string; errors: string[] }
 
     switch (type) {
@@ -124,14 +267,15 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
       case PharmaTokenType.BOM:
         result = buildBomFeatures(data as BomBuilderInput)
         if (result.success) setTokenName(`BOM: ${(data as BomBuilderInput).productName}`)
+        // No sobrescribir padres, ya se configuraron en el formulario principal
         break
       case PharmaTokenType.PT_LOTE:
         result = buildPtLoteFeatures(data as PtLoteBuilderInput)
         if (result.success) {
           setTokenName(`PT: ${(data as PtLoteBuilderInput).productName} - ${(data as PtLoteBuilderInput).batchNumber}`)
-          // Si tiene BOM asociado, agregar como padre con cantidad 1
+          // Si no hay padre configurado y tiene BOM asociado, agregar como padre con cantidad 1
           const ptData = data as PtLoteBuilderInput
-          if (ptData.bomTokenId) {
+          if (parentIds.length === 0 && ptData.bomTokenId) {
             setParentIds([{ tokenId: BigInt(ptData.bomTokenId), amount: BigInt(1) }])
           }
         }
@@ -145,19 +289,33 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
           result = buildTempLogFeatures(data as TempLogBuilderInput)
           if (result.success) {
             setTokenName(`TempLog: SSCC#${(data as TempLogBuilderInput).ssccTokenId}`)
-            setParentIds([{ tokenId: BigInt((data as TempLogBuilderInput).ssccTokenId), amount: BigInt(1) }])
+            // Si no hay padre configurado, usar el del formulario
+            if (parentIds.length === 0) {
+              const tempData = data as TempLogBuilderInput
+              setParentIds([{ tokenId: BigInt(tempData.ssccTokenId), amount: BigInt(1) }])
+            }
           }
         } else if (logType === ComplianceLogType.CAPA) {
           result = buildCapaFeatures(data as CapaBuilderInput)
           if (result.success) {
             setTokenName(`CAPA: ${(data as CapaBuilderInput).capaId}`)
-            setParentIds([{ tokenId: BigInt((data as CapaBuilderInput).ssccTokenId), amount: BigInt(1) }])
+            // Si no hay padre configurado, usar el del formulario
+            if (parentIds.length === 0) {
+              const capaData = data as CapaBuilderInput
+              setParentIds([{ tokenId: BigInt(capaData.ssccTokenId), amount: BigInt(1) }])
+            }
           }
         } else if (logType === ComplianceLogType.RECALL) {
           result = buildRecallFeatures(data as RecallBuilderInput)
           if (result.success) {
             setTokenName(`Recall: ${(data as RecallBuilderInput).recallId}`)
-            setParentIds([{ tokenId: BigInt((data as RecallBuilderInput).ptLoteTokenId), amount: BigInt(1) }])
+            // Si no hay padre configurado, usar el del formulario
+            if (parentIds.length === 0) {
+              const recallData = data as RecallBuilderInput
+              setParentIds([{ tokenId: BigInt(recallData.ptLoteTokenId), amount: BigInt(1) }])
+            }
+            // Guardar el flag de recall
+            setIsRecall(recallFlag || false)
           }
         } else {
           result = { success: false, errors: ['Tipo de log no soportado'] }
@@ -170,10 +328,25 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     if (result.success && result.json) {
       setFeaturesJson(result.json)
       setValidationErrors([])
-      setStep('review')
+      // Si es recall, mostrar warning antes de continuar
+      if (recallFlag && logType === ComplianceLogType.RECALL) {
+        setShowRecallWarning(true)
+      } else {
+        setStep('review')
+      }
     } else {
       setValidationErrors(result.errors)
     }
+  }
+
+  const handleConfirmRecall = () => {
+    setShowRecallWarning(false)
+    setStep('review')
+  }
+
+  const handleCancelRecall = () => {
+    setShowRecallWarning(false)
+    setIsRecall(false)
   }
 
   const handleCreateToken = async () => {
@@ -230,7 +403,8 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
       featuresJson,
       contractTokenType,
       safeParentIds,
-      safeParentAmounts
+      safeParentAmounts,
+      isRecall
     )
 
     if (success) {
@@ -251,6 +425,8 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
     setParentIds([])
     setValidationErrors([])
     setSuccess(false)
+    setIsRecall(false)
+    setShowRecallWarning(false)
     clearError()
   }
 
@@ -268,7 +444,7 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
           <BomForm 
             onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.BOM)}
             isLoading={isLoading}
-            availableTokens={filterTokensByType(PharmaTokenType.API_MP)}
+            availableTokens={filterTokensByType(PharmaTokenType.API_MP).filter(t => !t.recall)}
           />
         )
       case PharmaTokenType.PT_LOTE:
@@ -276,7 +452,7 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
           <PtLoteForm 
             onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.PT_LOTE)}
             isLoading={isLoading}
-            availableBoms={filterTokensByType(PharmaTokenType.BOM)}
+            availableBoms={filterTokensByType(PharmaTokenType.BOM).filter(t => !t.recall)}
           />
         )
       case PharmaTokenType.SSCC:
@@ -284,16 +460,16 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
           <SsccForm 
             onSubmit={(data) => handleFormSubmit(data, PharmaTokenType.SSCC)}
             isLoading={isLoading}
-            availablePtLotes={filterTokensByType(PharmaTokenType.PT_LOTE)}
+            availablePtLotes={filterTokensByType(PharmaTokenType.PT_LOTE).filter(t => !t.recall)}
           />
         )
       case PharmaTokenType.COMPLIANCE_LOG:
         return (
           <ComplianceLogForm 
-            onSubmit={(data, logType) => handleFormSubmit(data, PharmaTokenType.COMPLIANCE_LOG, logType)}
+            onSubmit={(data, logType, recallFlag) => handleFormSubmit(data, PharmaTokenType.COMPLIANCE_LOG, logType, recallFlag)}
             isLoading={isLoading}
-            availableSsccs={filterTokensByType(PharmaTokenType.SSCC)}
-            availablePtLotes={filterTokensByType(PharmaTokenType.PT_LOTE)}
+            availableSsccs={filterTokensByType(PharmaTokenType.SSCC).filter(t => !t.recall)}
+            availablePtLotes={filterTokensByType(PharmaTokenType.PT_LOTE).filter(t => !t.recall)}
           />
         )
       default:
@@ -396,13 +572,201 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
             </div>
           )}
 
-          {loadingTokens ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          {/* Selector de tipo de token (siempre visible primero) */}
+          <div className="mb-6 p-4 bg-surface-50 rounded-xl">
+            <label className="label mb-2">Tipo de Token *</label>
+            <select
+              value={selectedType || ''}
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleSelectType(e.target.value as PharmaTokenType)
+                }
+              }}
+              className="select-field"
+              required
+            >
+              <option value="">Seleccione Tipo de Token</option>
+              {TOKEN_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.icon} {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {!selectedType ? (
+            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+              <p className="text-yellow-800 text-sm">
+                ⚠️ Por favor, seleccione un tipo de token para continuar con el formulario.
+              </p>
             </div>
           ) : (
-            renderForm()
+            <>
+              {/* Cantidad Total */}
+              <div className="mb-6 p-4 bg-surface-50 rounded-xl">
+                <label className="label mb-2">Cantidad Total *</label>
+                <input
+                  type="number"
+                  value={totalSupply}
+                  onChange={(e) => setTotalSupply(Number(e.target.value))}
+                  className="input-field"
+                  min="1"
+                  disabled={!isTotalSupplyEditable()}
+                  readOnly={!isTotalSupplyEditable()}
+                />
+                {!isTotalSupplyEditable() && (
+                  <p className="text-xs text-surface-500 mt-1">
+                    La cantidad total para este tipo de token es fija: 1
+                  </p>
+                )}
+              </div>
+
+              {/* Padres */}
+              {selectedType !== PharmaTokenType.API_MP && (
+            <div className="mb-6 p-4 bg-surface-50 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <label className="label mb-0">Token{canAddMultipleParents() ? 's' : ''} Padre{canAddMultipleParents() ? 's' : ''}</label>
+                {canAddParents() && (
+                  <button
+                    type="button"
+                    onClick={addParent}
+                    className="text-xs text-primary-600 hover:text-primary-800 font-semibold"
+                    disabled={!canAddParents()}
+                  >
+                    + Agregar Padre
+                  </button>
+                )}
+              </div>
+              {parentIds.length === 0 ? (
+                <p className="text-xs text-surface-400">
+                  {selectedType === PharmaTokenType.API_MP 
+                    ? 'Las materias primas no requieren tokens padre'
+                    : 'Sin padres (opcional)'}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {parentIds.map((parent, index) => {
+                    const availableParents = getAvailableParentTokens()
+                    return (
+                      <div key={index} className="flex gap-2 items-end">
+                        <div className="flex-1">
+                          <label className="text-xs text-surface-400">Token Padre</label>
+                          <select
+                            value={parent.tokenId.toString()}
+                            onChange={(e) => updateParent(index, 'tokenId', BigInt(e.target.value))}
+                            className="input-field mt-1 text-sm"
+                          >
+                            <option value="0">Seleccionar...</option>
+                            {availableParents.map((token) => (
+                              <option key={token.id.toString()} value={token.id.toString()}>
+                                #{token.id.toString()} - {token.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="w-32">
+                          <label className="text-xs text-surface-400">
+                            Cantidad
+                            {parent.balance !== undefined && (
+                              <span className="text-surface-400"> (max: {parent.balance.toString()})</span>
+                            )}
+                          </label>
+                          <input
+                            type="number"
+                            value={parent.amount.toString()}
+                            onChange={(e) => {
+                              const value = BigInt(e.target.value || '0')
+                              const maxValue = parent.balance || BigInt(Number.MAX_SAFE_INTEGER)
+                              if (value <= maxValue) {
+                                updateParent(index, 'amount', value)
+                              }
+                            }}
+                            className="input-field mt-1 text-sm"
+                            min="1"
+                            max={parent.balance?.toString() || undefined}
+                            disabled={!isParentAmountEditable(index)}
+                            readOnly={!isParentAmountEditable(index)}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeParent(index)}
+                          className="text-red-600 hover:text-red-800 text-sm font-semibold px-2 py-1"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {loadingBalances && (
+                <p className="text-xs text-surface-500 mt-2">Cargando balances...</p>
+              )}
+            </div>
+              )}
+
+              {loadingTokens ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                </div>
+              ) : (
+                renderForm()
+              )}
+            </>
           )}
+        </div>
+      )}
+
+      {/* Popup de Warning para Recall */}
+      {showRecallWarning && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-surface-800">⚠️ Advertencia: Registro de Recall</h3>
+            </div>
+            
+            <div className="mb-6 space-y-3 text-surface-700">
+              <p className="font-semibold">¿Está seguro de que desea crear un registro de Recall?</p>
+              <p className="text-sm">
+                Esta acción marcará como <span className="font-semibold text-red-600">retirado (recall=true)</span> toda la cadena de suministro relacionada al token padre, incluyendo:
+              </p>
+              <ul className="list-disc list-inside text-sm space-y-1 ml-2">
+                <li>Todos los tokens padres (hacia arriba en la cadena)</li>
+                <li>Todos los tokens hijos (hacia abajo en la cadena)</li>
+                <li>Desde la materia prima hasta la unidad lógica relacionada</li>
+              </ul>
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm font-semibold text-red-800">
+                  ⚠️ Los tokens marcados como recall NO podrán:
+                </p>
+                <ul className="list-disc list-inside text-sm text-red-700 mt-1 ml-2">
+                  <li>Ser seleccionados como padre de otros tokens</li>
+                  <li>Ser transferidos</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelRecall}
+                className="btn-secondary flex-1"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmRecall}
+                className="btn-primary flex-1 bg-red-600 hover:bg-red-700"
+              >
+                Sí, Confirmar Recall
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -430,62 +794,89 @@ export function CreateTokenWizard({ onSuccess, onCancel }: CreateTokenWizardProp
                   onChange={(e) => setTotalSupply(Number(e.target.value))}
                   className="input-field mt-1"
                   min="1"
+                  disabled={!isTotalSupplyEditable()}
+                  readOnly={!isTotalSupplyEditable()}
                 />
-              </div>
-              <div className="p-4 bg-surface-50 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm text-surface-500">Padres (Opcional)</p>
-                  <button
-                    type="button"
-                    onClick={addParent}
-                    className="text-xs text-primary-600 hover:text-primary-800 font-semibold"
-                  >
-                    + Agregar Padre
-                  </button>
-                </div>
-                {parentIds.length === 0 ? (
-                  <p className="text-xs text-surface-400">Sin padres</p>
-                ) : (
-                  <div className="space-y-2">
-                    {parentIds.map((parent, index) => (
-                      <div key={index} className="flex gap-2 items-end">
-                        <div className="flex-1">
-                          <label className="text-xs text-surface-400">Token Padre</label>
-                          <select
-                            value={parent.tokenId.toString()}
-                            onChange={(e) => updateParent(index, 'tokenId', BigInt(e.target.value))}
-                            className="input-field mt-1 text-sm"
-                          >
-                            <option value="0">Seleccionar...</option>
-                            {userTokens.map((token) => (
-                              <option key={token.id.toString()} value={token.id.toString()}>
-                                #{token.id.toString()} - {token.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="w-24">
-                          <label className="text-xs text-surface-400">Cantidad</label>
-                          <input
-                            type="number"
-                            value={parent.amount.toString()}
-                            onChange={(e) => updateParent(index, 'amount', BigInt(e.target.value || '0'))}
-                            className="input-field mt-1 text-sm"
-                            min="1"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeParent(index)}
-                          className="text-red-600 hover:text-red-800 text-sm font-semibold px-2 py-1"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                {!isTotalSupplyEditable() && (
+                  <p className="text-xs text-surface-400 mt-1">Fijo: 1</p>
                 )}
               </div>
+              {selectedType !== PharmaTokenType.API_MP && (
+                <div className="p-4 bg-surface-50 rounded-xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-surface-500">Padres</p>
+                    {canAddParents() && (
+                      <button
+                        type="button"
+                        onClick={addParent}
+                        className="text-xs text-primary-600 hover:text-primary-800 font-semibold"
+                        disabled={!canAddParents()}
+                      >
+                        + Agregar Padre
+                      </button>
+                    )}
+                  </div>
+                  {parentIds.length === 0 ? (
+                    <p className="text-xs text-surface-400">Sin padres</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {parentIds.map((parent, index) => {
+                        const availableParents = getAvailableParentTokens()
+                        return (
+                          <div key={index} className="flex gap-2 items-end">
+                            <div className="flex-1">
+                              <label className="text-xs text-surface-400">Token Padre</label>
+                              <select
+                                value={parent.tokenId.toString()}
+                                onChange={(e) => updateParent(index, 'tokenId', BigInt(e.target.value))}
+                                className="input-field mt-1 text-sm"
+                              >
+                                <option value="0">Seleccionar...</option>
+                                {availableParents.map((token) => (
+                                  <option key={token.id.toString()} value={token.id.toString()}>
+                                    #{token.id.toString()} - {token.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="w-32">
+                              <label className="text-xs text-surface-400">
+                                Cantidad
+                                {parent.balance !== undefined && (
+                                  <span className="text-surface-400"> (max: {parent.balance.toString()})</span>
+                                )}
+                              </label>
+                              <input
+                                type="number"
+                                value={parent.amount.toString()}
+                                onChange={(e) => {
+                                  const value = BigInt(e.target.value || '0')
+                                  const maxValue = parent.balance || BigInt(Number.MAX_SAFE_INTEGER)
+                                  if (value <= maxValue) {
+                                    updateParent(index, 'amount', value)
+                                  }
+                                }}
+                                className="input-field mt-1 text-sm"
+                                min="1"
+                                max={parent.balance?.toString() || undefined}
+                                disabled={!isParentAmountEditable(index)}
+                                readOnly={!isParentAmountEditable(index)}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeParent(index)}
+                              className="text-red-600 hover:text-red-800 text-sm font-semibold px-2 py-1"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-4 bg-surface-50 rounded-xl">

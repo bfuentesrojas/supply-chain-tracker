@@ -1,5 +1,5 @@
 // Dirección del contrato desplegado (actualizar después del deploy)
-export const CONTRACT_ADDRESS = '0xa513E6E4b8f2a923D98304ec87F64353C4D5C853'
+export const CONTRACT_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512'
 
 // ChainId esperado (31337 = Anvil/Hardhat local)
 export const EXPECTED_CHAIN_ID = 31337
@@ -182,7 +182,8 @@ export const SUPPLY_CHAIN_ABI = [
       { "name": "features", "type": "string" },
       { "name": "tokenType", "type": "uint8" },
       { "name": "parentIds", "type": "uint256[]" },
-      { "name": "parentAmounts", "type": "uint256[]" }
+      { "name": "parentAmounts", "type": "uint256[]" },
+      { "name": "isRecall", "type": "bool" }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -204,7 +205,8 @@ export const SUPPLY_CHAIN_ABI = [
           { "name": "tokenType", "type": "uint8" },
           { "name": "parentIds", "type": "uint256[]" },
           { "name": "parentAmounts", "type": "uint256[]" },
-          { "name": "dateCreated", "type": "uint256" }
+          { "name": "dateCreated", "type": "uint256" },
+          { "name": "recall", "type": "bool" }
         ]
       }
     ],
@@ -367,6 +369,7 @@ export interface Token {
   parentIds: bigint[]
   parentAmounts: bigint[]
   dateCreated: bigint
+  recall: boolean
 }
 
 export interface Transfer {

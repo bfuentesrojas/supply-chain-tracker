@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
+import { useWeb3 } from '@/contexts/Web3Context'
 import { useSupplyChain } from '@/hooks/useSupplyChain'
 import { Token, Transfer, TransferStatus, formatTransferStatus, getTransferStatusColor, formatRole, tokenTypeNumberToString } from '@/contracts/SupplyChain'
 import { formatAddress, formatTimestamp, formatNumber } from '@/lib/web3Service'
@@ -23,6 +24,7 @@ interface TransferWithUserInfo extends Transfer {
 function TrackContentInner() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { account } = useWeb3()
   const { getToken, getTokenBalance, getTokenTransfers, getTokenHierarchy, getTotalTokens, getUserInfo, error } = useSupplyChain()
   
   const [tokenId, setTokenId] = useState('')
@@ -34,10 +36,32 @@ function TrackContentInner() {
   const [isLoadingTrace, setIsLoadingTrace] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'info' | 'hierarchy' | 'transfers'>('info')
+  const [showRecallInfo, setShowRecallInfo] = useState(false)
+  const [userRole, setUserRole] = useState<string | null>(null)
   
   // Historial de navegación para el botón volver
   const [navigationHistory, setNavigationHistory] = useState<string[]>([])
   const [cameFromLink, setCameFromLink] = useState(false)
+  
+  // Determinar si el usuario es consumidor
+  const isConsumer = userRole?.toLowerCase() === 'consumer' || userRole?.toLowerCase() === 'consumidor'
+
+  // Cargar rol del usuario
+  useEffect(() => {
+    const loadUserRole = async () => {
+      if (account) {
+        try {
+          const user = await getUserInfo(account)
+          if (user) {
+            setUserRole(user.role)
+          }
+        } catch (err) {
+          console.error('Error cargando rol del usuario:', err)
+        }
+      }
+    }
+    loadUserRole()
+  }, [account, getUserInfo])
 
   // Check URL params on mount
   useEffect(() => {
@@ -446,7 +470,30 @@ function TrackContentInner() {
           {/* Tab Content */}
           {activeTab === 'info' && (
             <div className="card">
-              <h3 className="text-lg font-semibold text-surface-800 mb-4">Detalles del Token</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-surface-800">Detalles del Token</h3>
+                {token.recall && (
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 bg-red-100 text-red-800 text-sm font-semibold rounded-full flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Retirado (Recall)
+                    </span>
+                    {isConsumer && (
+                      <button
+                        onClick={() => setShowRecallInfo(true)}
+                        className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 flex items-center justify-center transition-colors"
+                        title="Información sobre producto retirado"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="grid md:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div>
@@ -537,11 +584,26 @@ function TrackContentInner() {
                       const hasBomComponents = item.bomComponents && item.bomComponents.length > 0
                       const isBom = tokenType === 'BOM'
                       
+                      // Detectar si este token tiene múltiples padres (está en un nivel con otros tokens)
+                      // Un token tiene múltiples padres si el siguiente token en la jerarquía también tiene el mismo padre
+                      // o si este token tiene múltiples parentIds
+                      const hasMultipleParents = item.parentIds.length > 1
+                      const isInSameLevelAsNext = !isLast && hierarchy[index + 1]?.parentIds.length > 0
+                      
                       return (
                         <div key={item.id.toString()} className="relative">
                           {/* Connector line */}
                           {!isFirst && (
                             <div className="absolute left-6 -top-4 w-0.5 h-4 bg-surface-300"></div>
+                          )}
+                          
+                          {/* Indicador de nivel múltiple - mostrar cuando hay múltiples padres */}
+                          {hasMultipleParents && !isFirst && (
+                            <div className="mb-2 ml-4">
+                              <span className="text-xs text-surface-500 bg-surface-100 px-2 py-1 rounded">
+                                Múltiples padres en este nivel
+                              </span>
+                            </div>
                           )}
                           
                           <div 
@@ -571,6 +633,24 @@ function TrackContentInner() {
                                   <span className="px-2 py-0.5 bg-green-600 text-white text-xs rounded-full">
                                     Root
                                   </span>
+                                )}
+                                {item.recall && (
+                                  <div className="flex items-center gap-1">
+                                    <span className="px-2 py-0.5 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
+                                      Retirado
+                                    </span>
+                                    {isConsumer && (
+                                      <button
+                                        onClick={() => setShowRecallInfo(true)}
+                                        className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 flex items-center justify-center transition-colors"
+                                        title="Información sobre producto retirado"
+                                      >
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                        </svg>
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                               <h4 className="font-semibold text-surface-800 truncate">{item.name}</h4>
@@ -675,17 +755,65 @@ function TrackContentInner() {
                             </div>
                           )}
                           
-                          {/* Arrow down */}
+                          {/* Arrow down - solo mostrar si no es el último y no hay múltiples padres en el siguiente nivel */}
                           {!isLast && (
                             <div className="flex justify-center py-2">
-                              <svg className="w-6 h-6 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
+                              {/* Si el siguiente token tiene múltiples padres, mostrar un indicador diferente */}
+                              {hierarchy[index + 1]?.parentIds.length > 1 ? (
+                                <div className="flex items-center gap-2">
+                                  <svg className="w-6 h-6 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                  </svg>
+                                  <span className="text-xs text-surface-500">↓ Múltiples padres</span>
+                                </div>
+                              ) : (
+                                <svg className="w-6 h-6 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                </svg>
+          )}
+        </div>
+      )}
+
+      {/* Popup de información sobre Recall para consumidores */}
+      {showRecallInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRecallInfo(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-surface-800">Producto Retirado del Mercado</h3>
+            </div>
+            <div className="mb-6">
+              <p className="text-surface-700 mb-4">
+                Este producto ha sido retirado del mercado (recall) por el fabricante o las autoridades sanitarias. 
+                Por su seguridad, <strong>no debe utilizar este producto</strong>.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800 mb-2 font-semibold">Pasos a seguir:</p>
+                <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+                  <li>No consuma ni utilice este producto</li>
+                  <li>Conserve el producto en un lugar seguro hasta recibir instrucciones</li>
+                  <li>Contacte al punto de venta donde adquirió el producto</li>
+                  <li>Siga las instrucciones del fabricante o las autoridades sanitarias</li>
+                  <li>Si tiene dudas, consulte con su médico o farmacéutico</li>
+                </ol>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowRecallInfo(false)}
+              className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})}
                   </div>
                   
                   {/* Summary */}

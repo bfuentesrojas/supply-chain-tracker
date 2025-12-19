@@ -135,7 +135,8 @@ export function useSupplyChain() {
     features: string,
     tokenType: number, // TokenType enum como número (0-4)
     parentIds: bigint[],
-    parentAmounts: bigint[]
+    parentAmounts: bigint[],
+    isRecall: boolean = false
   ): Promise<boolean> => {
     if (!contract) {
       setError('Contrato no disponible')
@@ -198,7 +199,7 @@ export function useSupplyChain() {
 
       // Intentar estimar el gas primero para obtener un error más descriptivo
       try {
-        const gasEstimate = await contract.createToken.estimateGas(name.trim(), totalSupply, features, tokenType, safeParentIds, safeParentAmounts)
+        const gasEstimate = await contract.createToken.estimateGas(name.trim(), totalSupply, features, tokenType, safeParentIds, safeParentAmounts, isRecall)
         console.log('[DEBUG] Gas estimate:', gasEstimate.toString())
       } catch (estimateErr: any) {
         console.error('[DEBUG] Gas estimate failed:', estimateErr)
@@ -219,7 +220,7 @@ export function useSupplyChain() {
         throw estimateErr
       }
 
-      const tx = await contract.createToken(name.trim(), totalSupply, features, tokenType, safeParentIds, safeParentAmounts)
+      const tx = await contract.createToken(name.trim(), totalSupply, features, tokenType, safeParentIds, safeParentAmounts, isRecall)
       await tx.wait()
       return true
     } catch (err) {
@@ -282,7 +283,8 @@ export function useSupplyChain() {
         tokenType: Number(token.tokenType) as TokenType,
         parentIds: token.parentIds.map((id: bigint) => id),
         parentAmounts: token.parentAmounts.map((amt: bigint) => amt),
-        dateCreated: token.dateCreated
+        dateCreated: token.dateCreated,
+        recall: token.recall || false
       }
     } catch (err) {
       console.error('Error obteniendo token:', err)
@@ -504,26 +506,55 @@ export function useSupplyChain() {
 
     try {
       const hierarchy: Token[] = []
-      let currentId = tokenId
+      const visited = new Set<string>() // Para evitar ciclos
       
-      while (currentId > BigInt(0)) {
-        const token = await contract.getToken(currentId)
-        if (!token || token.id === BigInt(0)) break
+      // Construir jerarquía nivel por nivel usando BFS
+      // Esto asegura que todos los padres de un token se muestren en el mismo nivel
+      let currentLevel: bigint[] = [tokenId]
+      
+      while (currentLevel.length > 0) {
+        const nextLevel: bigint[] = []
+        const currentLevelTokens: Token[] = []
         
-        hierarchy.push({
-          id: token.id,
-          creator: token.creator,
-          name: token.name,
-          totalSupply: token.totalSupply,
-          features: token.features,
-          tokenType: Number(token.tokenType) as TokenType,
-          parentIds: token.parentIds.map((id: bigint) => id),
-          parentAmounts: token.parentAmounts.map((amt: bigint) => amt),
-          dateCreated: token.dateCreated
-        })
+        // Procesar todos los tokens del nivel actual
+        for (const id of currentLevel) {
+          if (!id || id === BigInt(0)) continue
+          
+          const idStr = id.toString()
+          if (visited.has(idStr)) continue // Evitar ciclos
+          visited.add(idStr)
+          
+          const token = await contract.getToken(id)
+          if (!token || token.id === BigInt(0)) continue
+          
+          // Agregar el token al nivel actual
+          currentLevelTokens.push({
+            id: token.id,
+            creator: token.creator,
+            name: token.name,
+            totalSupply: token.totalSupply,
+            features: token.features,
+            tokenType: Number(token.tokenType) as TokenType,
+            parentIds: token.parentIds.map((id: bigint) => id),
+            parentAmounts: token.parentAmounts.map((amt: bigint) => amt),
+            dateCreated: token.dateCreated,
+            recall: token.recall || false
+          })
+          
+          // Agregar todos los padres al siguiente nivel
+          // Esto permite que múltiples padres se muestren juntos en el mismo nivel
+          for (const parentId of token.parentIds) {
+            if (parentId > BigInt(0) && !visited.has(parentId.toString())) {
+              nextLevel.push(parentId)
+            }
+          }
+        }
         
-        // Usar el primer parentId si existe para la jerarquía
-        currentId = token.parentIds.length > 0 ? token.parentIds[0] : BigInt(0)
+        // Agregar todos los tokens del nivel actual a la jerarquía
+        // Esto asegura que los tokens con múltiples padres se muestren juntos
+        hierarchy.push(...currentLevelTokens)
+        
+        currentLevel = nextLevel
       }
       
       return hierarchy

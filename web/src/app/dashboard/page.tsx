@@ -46,6 +46,7 @@ function DashboardContent() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [activeProfileTab, setActiveProfileTab] = useState<'tokens' | 'received' | 'sent' | 'status'>('tokens')
+  const [showRecallInfo, setShowRecallInfo] = useState(false)
   
   // Determinar el tipo de perfil
   const isConsumer = user?.role.toLowerCase() === CONSUMER_ROLE
@@ -514,7 +515,29 @@ function DashboardContent() {
                 {tokens.slice(0, 5).map((token) => (
                   <tr key={token.id.toString()} className="border-b border-surface-100 hover:bg-surface-50">
                     <td className="py-3 px-4 text-sm text-surface-700">#{token.id.toString()}</td>
-                    <td className="py-3 px-4 text-sm text-surface-700">{token.name}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-surface-700">{token.name}</span>
+                        {token.recall && (
+                          <div className="flex items-center gap-1">
+                            <span className="px-2 py-0.5 bg-red-100 text-red-800 text-xs font-semibold rounded-full">
+                              Retirado
+                            </span>
+                            {isConsumer && (
+                              <button
+                                onClick={() => setShowRecallInfo(true)}
+                                className="w-4 h-4 rounded-full bg-blue-100 text-blue-600 hover:bg-blue-200 flex items-center justify-center transition-colors"
+                                title="Información sobre producto retirado"
+                              >
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 text-sm text-surface-700">{formatNumber(token.balance)}</td>
                     <td className="py-3 px-4 text-sm text-surface-700">{formatNumber(token.totalSupply)}</td>
                     <td className="py-3 px-4 text-sm text-surface-700">{formatTimestamp(token.dateCreated)}</td>
@@ -590,6 +613,44 @@ function DashboardContent() {
           </div>
         )}
       </div>
+
+      {/* Popup de información sobre Recall para consumidores */}
+      {showRecallInfo && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRecallInfo(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-surface-800">Producto Retirado del Mercado</h3>
+            </div>
+            <div className="mb-6">
+              <p className="text-surface-700 mb-4">
+                Este producto ha sido retirado del mercado (recall) por el fabricante o las autoridades sanitarias. 
+                Por su seguridad, <strong>no debe utilizar este producto</strong>.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800 mb-2 font-semibold">Pasos a seguir:</p>
+                <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+                  <li>No consuma ni utilice este producto</li>
+                  <li>Conserve el producto en un lugar seguro hasta recibir instrucciones</li>
+                  <li>Contacte al punto de venta donde adquirió el producto</li>
+                  <li>Siga las instrucciones del fabricante o las autoridades sanitarias</li>
+                  <li>Si tiene dudas, consulte con su médico o farmacéutico</li>
+                </ol>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowRecallInfo(false)}
+              className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

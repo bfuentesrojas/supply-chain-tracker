@@ -46,6 +46,7 @@ contract SupplyChain {
         uint256[] parentIds;  // IDs de los tokens padres (vacío si no tiene)
         uint256[] parentAmounts;  // Cantidades de cada token padre (vacío si no tiene)
         uint256 dateCreated;
+        bool recall;          // Indica si el token está retirado (recall)
     }
 
     /// @dev Estructura para almacenar balances de token (auxiliar para retornos)
@@ -252,16 +253,27 @@ contract SupplyChain {
         string memory features,
         TokenType tokenType,
         uint256[] memory parentIds,
-        uint256[] memory parentAmounts
+        uint256[] memory parentAmounts,
+        bool isRecall
     ) public onlyApprovedUser {
         require(bytes(name).length > 0, "El nombre no puede estar vacio");
         require(totalSupply > 0, "El supply debe ser mayor a 0");
         require(parentIds.length == parentAmounts.length, "parentIds y parentAmounts deben tener la misma longitud");
         
-        // Verificar que todos los parentIds existan
+        // Verificar que todos los parentIds existan y no estén en recall
         for (uint256 i = 0; i < parentIds.length; i++) {
             require(parentIds[i] > 0 && parentIds[i] < nextTokenId, "Token padre no existe");
             require(parentAmounts[i] > 0, "La cantidad del padre debe ser mayor a 0");
+            
+            // Verificar que el token padre no esté en recall
+            Token memory parentToken = _tokens[parentIds[i]];
+            require(!parentToken.recall, "No se puede usar un token retirado (recall) como padre");
+        }
+        
+        // Validar que isRecall solo sea true para COMPLIANCE_LOG
+        if (isRecall) {
+            require(tokenType == TokenType.COMPLIANCE_LOG, "El recall solo es valido para tokens de tipo COMPLIANCE_LOG");
+            require(parentIds.length == 1, "Un recall debe tener exactamente un padre");
         }
 
         // Si es un PT_LOTE, verificar y descontar componentes de la receta
@@ -278,6 +290,36 @@ contract SupplyChain {
             _consumeRecipeComponents(recipe, totalSupply, msg.sender);
         }
 
+        // Si es un SSCC (unidad lógica), verificar y descontar unidades del lote padre
+        if (tokenType == TokenType.SSCC) {
+            require(parentIds.length == 1, "Una unidad logistica debe tener exactamente un padre (lote)");
+            
+            uint256 lotId = parentIds[0];
+            Token memory lot = _tokens[lotId];
+            
+            // Verificar que el padre sea un lote (PT_LOTE)
+            require(lot.tokenType == TokenType.PT_LOTE, "El padre de una unidad logistica debe ser un lote (PT_LOTE)");
+            
+            // Verificar que la cantidad del padre sea válida
+            uint256 parentAmount = parentAmounts[0];
+            require(parentAmount > 0, "La cantidad del lote padre debe ser mayor a 0");
+            
+            // Calcular la cantidad total a consumir: supply de SSCC × cantidad del padre
+            uint256 totalAmountToConsume = totalSupply * parentAmount;
+            
+            // Verificar que el usuario tenga suficiente balance del lote padre
+            // Validar: supply de SSCC × cantidad del padre ≤ balance del lote padre
+            uint256 availableBalance = _tokenBalances[lotId][msg.sender];
+            require(
+                availableBalance >= totalAmountToConsume,
+                "Balance insuficiente: el supply de la unidad logistica multiplicado por la cantidad del padre excede el balance disponible del lote"
+            );
+            
+            // Descontar las unidades del balance del usuario
+            // Fórmula: balance -= (supply de SSCC × cantidad del padre)
+            _tokenBalances[lotId][msg.sender] -= totalAmountToConsume;
+        }
+
         uint256 tokenId = nextTokenId;
         
         _tokens[tokenId] = Token({
@@ -289,7 +331,8 @@ contract SupplyChain {
             tokenType: tokenType,
             parentIds: parentIds,
             parentAmounts: parentAmounts,
-            dateCreated: block.timestamp
+            dateCreated: block.timestamp,
+            recall: isRecall
         });
 
         // Asignar todo el supply al creador
@@ -300,7 +343,70 @@ contract SupplyChain {
 
         nextTokenId++;
 
+        // Si es un recall, marcar toda la cadena de suministro relacionada
+        if (isRecall && parentIds.length > 0) {
+            uint256 parentTokenId = parentIds[0];
+            _markSupplyChainAsRecall(parentTokenId);
+        }
+
         emit TokenCreated(tokenId, msg.sender, name, totalSupply);
+    }
+
+    /**
+     * @dev Marca toda la cadena de suministro relacionada como recall
+     * @param tokenId ID del token padre del recall
+     */
+    function _markSupplyChainAsRecall(uint256 tokenId) internal {
+        // Marcar el token actual como recall
+        _tokens[tokenId].recall = true;
+        
+        // Marcar todos los padres (hacia arriba en la cadena)
+        _markParentsAsRecall(tokenId);
+        
+        // Marcar todos los hijos (hacia abajo en la cadena)
+        _markChildrenAsRecall(tokenId);
+    }
+    
+    /**
+     * @dev Marca recursivamente todos los tokens padres como recall
+     * @param tokenId ID del token
+     */
+    function _markParentsAsRecall(uint256 tokenId) internal {
+        Token storage token = _tokens[tokenId];
+        
+        // Recorrer todos los padres
+        for (uint256 i = 0; i < token.parentIds.length; i++) {
+            uint256 parentId = token.parentIds[i];
+            
+            // Si el padre no está ya marcado como recall, marcarlo y continuar recursivamente
+            if (!_tokens[parentId].recall) {
+                _tokens[parentId].recall = true;
+                _markParentsAsRecall(parentId);
+            }
+        }
+    }
+    
+    /**
+     * @dev Marca recursivamente todos los tokens hijos como recall
+     * @param tokenId ID del token
+     */
+    function _markChildrenAsRecall(uint256 tokenId) internal {
+        // Buscar todos los tokens que tienen este token como padre
+        for (uint256 i = 1; i < nextTokenId; i++) {
+            Token storage childToken = _tokens[i];
+            
+            // Verificar si este token tiene el tokenId como padre
+            for (uint256 j = 0; j < childToken.parentIds.length; j++) {
+                if (childToken.parentIds[j] == tokenId) {
+                    // Si el hijo no está ya marcado como recall, marcarlo y continuar recursivamente
+                    if (!childToken.recall) {
+                        childToken.recall = true;
+                        _markChildrenAsRecall(i);
+                    }
+                    break; // Solo necesitamos encontrar una vez
+                }
+            }
+        }
     }
 
     /**
@@ -372,6 +478,9 @@ contract SupplyChain {
         require(to != msg.sender, "No puedes transferir a ti mismo");
         require(amount > 0, "La cantidad debe ser mayor a 0");
         require(_tokenBalances[tokenId][msg.sender] >= amount, "Balance insuficiente");
+        
+        // Verificar que el token no esté en recall
+        require(!_tokens[tokenId].recall, "No se puede transferir un token retirado (recall)");
         
         // Verificar que el destinatario sea un usuario aprobado
         uint256 toUserId = addressToUserId[to];

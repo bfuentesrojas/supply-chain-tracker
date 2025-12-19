@@ -525,6 +525,8 @@ supply-chain-tracker/
 
 ### Sesión 7: Sistema de Múltiples Padres y Descuento de Supply (Diciembre 2024 - Enero 2025)
 
+### Sesión 8: Sistema de Recall y Mejoras de Jerarquía (Enero 2025)
+
 #### Cambios en Smart Contracts
 | Tarea | Tiempo Estimado |
 |-------|-----------------|
@@ -752,6 +754,111 @@ Esta función:
 - Verificación de que el padre sea una receta (BOM)
 - Cálculo y verificación de componentes disponibles antes de crear el lote
 - Mensajes descriptivos que indican qué componente falta y cuánto se necesita
+
+## 2.12. Sistema de Recall y Mejoras de Jerarquía (Sesión 8 - Enero 2025)
+
+### Cambios en Smart Contracts
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Agregado campo `recall` (bool) al struct Token | 2 min |
+| Implementación de validación de recall solo para COMPLIANCE_LOG | 3 min |
+| Implementación de marcado de cadena de suministro como retirada | 8 min |
+| Validación de que tokens retirados no se puedan usar como padres | 3 min |
+| Bloqueo de transferencias de tokens retirados | 2 min |
+| Corrección de tests (expectEmit con 4 parámetros) | 5 min |
+| Corrección de test testCreateTokenByRetailer para SSCC | 5 min |
+| Compilación y verificación | 2 min |
+| **Total Smart Contracts** | **~30 minutos** |
+
+### Cambios en Frontend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Actualización de tipos TypeScript (campo recall) | 2 min |
+| Actualización de ABI del contrato | 3 min |
+| Agregado checkbox de recall en products/page.tsx | 5 min |
+| Implementación de popup de advertencia para recall | 8 min |
+| Agregado indicador "Retirado" en dashboard | 3 min |
+| Agregado indicador "Retirado" en track (info) | 3 min |
+| Agregado indicador "Retirado" en jerarquía | 3 min |
+| Implementación de icono de información para consumidores | 8 min |
+| Popup explicativo para consumidores sobre productos retirados | 10 min |
+| Mejora de jerarquía para mostrar múltiples padres en mismo nivel (BFS) | 8 min |
+| Actualización de getTokenHierarchy para mapear campo recall | 2 min |
+| Build y verificación | 2 min |
+| **Total Frontend** | **~57 minutos** |
+
+### Funcionalidades Implementadas
+
+1. **Sistema de Recall (Retiro de Productos)**:
+   - Campo `recall: bool` agregado al struct Token
+   - Validación: recall solo válido para tokens COMPLIANCE_LOG
+   - Validación: recall debe tener exactamente un padre
+   - Marcado automático de toda la cadena de suministro relacionada como retirada
+   - Bloqueo de transferencias de tokens retirados
+   - Bloqueo de uso de tokens retirados como padres
+
+2. **Interfaz de Usuario para Recall**:
+   - Checkbox de recall visible solo para COMPLIANCE_LOG
+   - Popup de advertencia antes de crear token con recall
+   - Indicador visual "Retirado" en todas las vistas:
+     - Dashboard (lista de tokens)
+     - Página de productos (lista de tokens)
+     - Vista de información del token
+     - Árbol de jerarquía
+   - Icono de información para consumidores:
+     - Aparece junto al badge "Retirado" solo para usuarios consumidores
+     - Popup explicativo con pasos a seguir
+     - Mensaje claro pero no alarmista
+
+3. **Mejoras en Visualización de Jerarquía**:
+   - Implementación de BFS (Breadth-First Search) para construir jerarquía
+   - Todos los padres de un token se muestran en el mismo nivel
+   - Especialmente útil para BOMs con múltiples padres (materias primas)
+   - Indicadores visuales cuando hay múltiples padres en el mismo nivel
+
+4. **Correcciones de Tests**:
+   - Corrección de `expectEmit` para usar 4 parámetros booleanos
+   - Corrección de `testCreateTokenByRetailer` para crear SSCC con padre PT_LOTE válido
+   - Todos los 55 tests pasando correctamente
+
+### Resumen de Sesión 8
+
+| Componente | Tiempo |
+|------------|--------|
+| Smart Contracts | ~30 min |
+| Frontend | ~57 min |
+| Documentación | ~5 min |
+| **Total Sesión 8** | **~92 minutos** |
+
+### Resumen Total Actualizado
+
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Sesión 8 | Total |
+|------------|----------|----------|----------|----------|----------|----------|----------|----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~43 min | ~30 min | **~139 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~52 min | ~57 min | **~454 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | ~5 min | **~45 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~100 min** | **~92 min** | **~643 min (~10h 43min)** |
+
+### Estadísticas Finales Actualizadas
+
+| Métrica | Valor |
+|---------|-------|
+| Tiempo total de desarrollo | ~10h 43min |
+| Sesiones de desarrollo | 8 |
+| Archivos de código creados | 80+ |
+| Líneas de código totales | ~14,000+ |
+| Tests unitarios | 55 (todos pasando) |
+| Páginas del frontend | 6 |
+| Componentes React | 10+ |
+| Hooks personalizados | 1 |
+| Contratos Solidity | 1 |
+| Tipos de token pharma | 5 |
+| Validadores Zod | 8 |
+| Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall |
+
+---
 
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
 *Última actualización: Enero 2025*
