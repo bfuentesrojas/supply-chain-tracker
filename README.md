@@ -24,6 +24,8 @@ Sistema de trazabilidad para cadena de suministro farmacéutica en Chile (MVP), 
 - **Tailwind CSS** - Estilos utilitarios
 - **ethers.js** v6 - Interacción con Ethereum
 - **Zod** - Validación de esquemas
+- **Express.js** - Servidor API para herramientas MCP (puerto 3002)
+- **tsx** - Ejecución de TypeScript para servidor Express
 
 ## 📁 Estructura del Proyecto
 
@@ -66,7 +68,12 @@ supply-chain-tracker/
 │   │   ├── hooks/                   # Custom hooks
 │   │   │   └── useSupplyChain.ts    # Hook del contrato
 │   │   ├── contracts/               # ABI y configuración
+│   │   ├── app/
+│   │   │   ├── tools/               # Interfaz MCP Tools (puerto 3001)
+│   │   │   └── api/tools/           # API routes (deprecated, usar server/)
 │   │   └── lib/                     # Utilidades
+│   ├── server/                      # Servidor Express para APIs MCP
+│   │   └── mcp-api-server.ts        # Servidor API (puerto 3002)
 │   ├── package.json
 │   └── tailwind.config.js
 ├── chats/                           # Logs de sesiones IA
@@ -222,6 +229,17 @@ Panel de administración:
 - Filtro por estado
 - Búsqueda por dirección
 - Acciones de cambio de estado
+
+#### 🛠️ Herramientas MCP (`/tools`)
+Interfaz para gestionar herramientas Foundry:
+- **Health Check**: Verifica estado de herramientas Foundry y Anvil
+- **Forge Build**: Compila smart contracts
+- **Forge Test**: Ejecuta tests con verbosidad configurable
+- **Anvil Restart**: Reinicia Anvil (detiene todos los procesos y inicia uno nuevo)
+- **Cast Call**: Ejecuta llamadas de solo lectura a contratos
+- **Cast Send**: Envía transacciones a contratos
+- Frontend disponible en `http://localhost:3001`
+- API disponible en `http://localhost:3002`
 
 ## 🧪 Testing
 

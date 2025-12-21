@@ -860,5 +860,109 @@ Esta función:
 
 ---
 
+## 2.13. Sistema MCP (Model Context Protocol) y Herramientas Foundry (Diciembre 2024 - Enero 2025)
+
+### Cambios en Backend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Creación de servidor Express para APIs MCP (puerto 3002) | 15 min |
+| Implementación de endpoints Foundry (forge/build, forge/test) | 10 min |
+| Implementación de endpoint anvil/restart (reemplazo de start/stop) | 20 min |
+| Implementación de endpoints cast/call y cast/send | 15 min |
+| Implementación de endpoint health | 8 min |
+| Funciones de sanitización y validación (foundryTools.ts) | 12 min |
+| Corrección de sanitización para permitir paréntesis en firmas de función | 8 min |
+| Scripts de inicio (start-mcp-api.sh, start-tools.sh) | 5 min |
+| Documentación DATOS_PRUEBA_CAST.md | 10 min |
+| **Total Backend** | **~103 minutos** |
+
+### Cambios en Frontend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Creación de página /tools para interfaz MCP (puerto 3001) | 25 min |
+| Implementación de componentes UI para cada herramienta | 20 min |
+| Integración de llamadas a API MCP | 15 min |
+| Mejoras de UI para mostrar resultados detallados | 12 min |
+| Actualización de anvil/start y anvil/stop a anvil/restart | 8 min |
+| **Total Frontend** | **~80 minutos** |
+
+### Funcionalidades Implementadas
+
+1. **Sistema MCP (Model Context Protocol)**:
+   - Servidor Express.js separado en puerto 3002 para APIs MCP
+   - Frontend Next.js en puerto 3001 para herramientas
+   - Arquitectura separada: dApp (3000), Tools (3001), API (3002)
+
+2. **Endpoints de API MCP**:
+   - `GET /health`: Verifica estado de herramientas Foundry y Anvil
+   - `POST /forge/build`: Compila smart contracts
+   - `POST /forge/test`: Ejecuta tests con verbosidad configurable
+   - `POST /anvil/restart`: Reinicia Anvil (detiene todos los procesos y inicia uno nuevo)
+   - `POST /cast/call`: Ejecuta llamadas de solo lectura a contratos
+   - `POST /cast/send`: Envía transacciones a contratos
+
+3. **Características de Seguridad**:
+   - Validación de inputs con Zod
+   - Sanitización de argumentos con allowlist
+   - Ejecución segura con `execFile` (no `exec`)
+   - Validación de comandos permitidos
+
+4. **Mejoras en Gestión de Anvil**:
+   - Reemplazo de `anvil/start` y `anvil/stop` por `anvil/restart`
+   - Detención agresiva de todos los procesos Anvil antes de reiniciar
+   - Verificación de procesos zombies y no responsivos
+   - Detección de reinicios automáticos y advertencias al usuario
+
+5. **Correcciones en Cast Call/Send**:
+   - Corrección de sanitización para permitir paréntesis en firmas de función
+   - Soporte para argumentos de función (`args` array)
+   - Mejor manejo de arrays vacíos y con valores
+
+6. **Documentación**:
+   - `DATOS_PRUEBA_CAST.md`: Guía completa con ejemplos para cast call/send
+   - `web/src/app/api/tools/README.md`: Documentación de APIs
+   - `web/src/app/tools/README.md`: Documentación del frontend de herramientas
+
+### Resumen de Sesión 9
+
+| Componente | Tiempo |
+|------------|--------|
+| Backend (APIs MCP) | ~103 min |
+| Frontend (Interfaz Tools) | ~80 min |
+| Documentación | ~10 min |
+| **Total Sesión 9** | **~193 minutos (~3h 13min)** |
+
+### Resumen Total Actualizado
+
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Sesión 8 | Sesión 9 | Total |
+|------------|----------|----------|----------|----------|----------|----------|----------|----------|----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~43 min | ~30 min | - | **~139 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~52 min | ~57 min | ~80 min | **~534 min** |
+| Backend/APIs | - | - | - | - | - | - | - | - | ~103 min | **~103 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | ~5 min | ~10 min | **~55 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~100 min** | **~92 min** | **~193 min** | **~836 min (~13h 56min)** |
+
+### Estadísticas Finales Actualizadas
+
+| Métrica | Valor |
+|---------|-------|
+| Tiempo total de desarrollo | ~13h 56min |
+| Sesiones de desarrollo | 9 |
+| Archivos de código creados | 90+ |
+| Líneas de código totales | ~16,000+ |
+| Tests unitarios | 55 (todos pasando) |
+| Páginas del frontend | 7 (incluye /tools) |
+| Componentes React | 12+ |
+| Hooks personalizados | 1 |
+| Contratos Solidity | 1 |
+| APIs REST | 6 endpoints |
+| Tipos de token pharma | 5 |
+| Validadores Zod | 8 |
+| Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall, MCP Tools |
+
+---
+
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
 *Última actualización: Enero 2025*

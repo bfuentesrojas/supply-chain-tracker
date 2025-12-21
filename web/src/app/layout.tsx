@@ -16,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: 'Supply Chain Tracker - dApp',
-  description: 'Aplicación descentralizada para gestión de cadena de suministros',
+  description: 'Aplicacion descentralizada para gestion de cadena de suministros',
 }
 
 export default function RootLayout({
@@ -34,7 +34,7 @@ export default function RootLayout({
               {children}
             </main>
             <footer className="py-6 text-center text-surface-500 text-sm border-t border-surface-200">
-              <p>Supply Chain Tracker © 2025</p>
+              <p>Supply Chain Tracker (c) 2025</p>
             </footer>
           </div>
         </Web3Provider>
