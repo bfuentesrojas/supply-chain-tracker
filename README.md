@@ -24,7 +24,7 @@ Sistema de trazabilidad para cadena de suministro farmacéutica en Chile (MVP), 
 - **Tailwind CSS** - Estilos utilitarios
 - **ethers.js** v6 - Interacción con Ethereum
 - **Zod** - Validación de esquemas
-- **Express.js** - Servidor API para herramientas MCP (puerto 3002)
+- **Express.js** - Servidor API para herramientas MCP (puerto 3001)
 - **tsx** - Ejecución de TypeScript para servidor Express
 
 ## 📁 Estructura del Proyecto
@@ -69,11 +69,11 @@ supply-chain-tracker/
 │   │   │   └── useSupplyChain.ts    # Hook del contrato
 │   │   ├── contracts/               # ABI y configuración
 │   │   ├── app/
-│   │   │   ├── tools/               # Interfaz MCP Tools (puerto 3001)
+│   │   │   ├── tools/               # Interfaz MCP Tools (disponible en /tools)
 │   │   │   └── api/tools/           # API routes (deprecated, usar server/)
 │   │   └── lib/                     # Utilidades
 │   ├── server/                      # Servidor Express para APIs MCP
-│   │   └── mcp-api-server.ts        # Servidor API (puerto 3002)
+│   │   └── mcp-api-server.ts        # Servidor API (puerto 3001)
 │   ├── package.json
 │   └── tailwind.config.js
 ├── chats/                           # Logs de sesiones IA
@@ -112,19 +112,36 @@ npm install
 
 ## 💻 Uso
 
-### 1. Iniciar nodo local (Anvil)
+### Opción 1: Script Automatizado (Recomendado)
+```bash
+# Inicia todo el ambiente automáticamente
+./start-all.sh
+```
+
+Este script:
+1. Inicia el servidor MCP API (puerto 3001)
+2. Compila los smart contracts
+3. Inicia Anvil (blockchain local)
+4. Despliega el contrato automáticamente
+5. Actualiza la dirección del contrato en los archivos de configuración
+6. Fondea las cuentas de prueba
+7. Inicia el frontend (puerto 3000)
+
+### Opción 2: Manual
+
+#### 1. Iniciar nodo local (Anvil)
 ```bash
 # En una terminal
 anvil
 ```
 
-### 2. Desplegar contratos
+#### 2. Desplegar contratos
 ```bash
 cd sc
 forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
 ```
 
-### 3. Fondear cuentas de prueba (opcional)
+#### 3. Fondear cuentas de prueba (opcional)
 ```bash
 # Desde sc/
 forge script script/FundAccounts.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
@@ -133,16 +150,34 @@ forge script script/FundAccounts.s.sol --rpc-url http://127.0.0.1:8545 --broadca
 cast send <direccion> --value 10ether --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --rpc-url http://127.0.0.1:8545
 ```
 
-### 4. Actualizar dirección del contrato
+#### 4. Actualizar dirección del contrato
 Copiar la dirección del contrato desplegado y actualizar en:
-`web/src/contracts/SupplyChain.ts` → `CONTRACT_ADDRESS`
+- `web/src/contracts/SupplyChain.ts` → `CONTRACT_ADDRESS`
+- `web/.env.local` → `CONTRACT` y `NEXT_PUBLIC_CONTRACT`
 
-### 5. Iniciar frontend
+#### 5. Iniciar servidor MCP API (opcional, para herramientas)
+```bash
+./start-mcp-api.sh
+# O manualmente:
+cd web
+npx tsx server/mcp-api-server.ts
+```
+
+#### 6. Iniciar frontend
 ```bash
 cd web
 npm run dev
 ```
 Abrir http://localhost:3000
+
+#### 7. Iniciar Ollama (para Asistente de IA)
+```bash
+ollama serve
+# Verificar que el modelo esté disponible:
+ollama list
+# Si falta, descargarlo:
+ollama pull llama3.2
+```
 
 ### 6. Configurar MetaMask
 1. Agregar red Anvil Local:
@@ -236,10 +271,29 @@ Interfaz para gestionar herramientas Foundry:
 - **Forge Build**: Compila smart contracts
 - **Forge Test**: Ejecuta tests con verbosidad configurable
 - **Anvil Restart**: Reinicia Anvil (detiene todos los procesos y inicia uno nuevo)
+- **Anvil Start/Stop**: Inicia o detiene Anvil
+- **Fondear Cuentas**: Ejecuta script de funding o fonda direcciones específicas
 - **Cast Call**: Ejecuta llamadas de solo lectura a contratos
 - **Cast Send**: Envía transacciones a contratos
-- Frontend disponible en `http://localhost:3001`
-- API disponible en `http://localhost:3002`
+- Frontend disponible en `http://localhost:3000/tools`
+- API disponible en `http://localhost:3001`
+
+#### 🤖 Asistente de IA
+Chat flotante disponible en todas las páginas con capacidades completas:
+- **Consultas**: Información sobre usuarios, tokens, transferencias y estadísticas del sistema
+- **Búsquedas avanzadas**: Filtrado por múltiples criterios (rol Y estado, tipo Y recall, etc.)
+- **Explicaciones**: Respuestas sobre el funcionamiento del sistema, tipos de tokens, jerarquía, etc.
+- **Acciones**: Ejecución de acciones sobre el contrato (aprobar usuarios, crear tokens, transferir, etc.)
+- **Contexto**: Mantiene contexto de conversación para referencias como "este usuario" o "esta transferencia"
+- **Confirmaciones**: Modal de confirmación para transacciones que requieren firma
+
+**Herramientas disponibles para la IA**:
+- Consulta: `get_token_status`, `list_all_tokens`, `get_user_info`, `list_all_users`, `get_transfer_info`, `list_all_transfers`, `get_user_tokens`, `get_user_transfers`, `get_system_stats`
+- Acciones: `change_user_status`, `create_token`, `transfer_token`, `accept_transfer`, `reject_transfer`
+
+**Requisitos**:
+- Ollama corriendo en `http://127.0.0.1:11434`
+- Modelo `llama3.2` disponible (o configurar otro modelo en `.env.local`)
 
 ## 🧪 Testing
 
@@ -316,6 +370,18 @@ Todas las validaciones incluyen verificación de dígito de control (Modulo 10).
 - ✅ **Validaciones previas**: Verifica componentes suficientes antes de enviar transacción
 - ✅ **Mensajes de error descriptivos**: Indica específicamente qué componente falta y cuánto se necesita
 - ✅ **Schema JSON actualizado**: Campo `type` removido (ahora es parte del contrato)
+
+## ✨ Mejoras Recientes (Diciembre 2024 - Enero 2025)
+
+### Asistente de IA Integrado (Enero 2025)
+- ✅ **Chat flotante**: Disponible en todas las páginas con interfaz moderna
+- ✅ **9 herramientas de consulta**: Tokens, usuarios, transferencias, estadísticas
+- ✅ **5 herramientas de acción**: Cambiar estado de usuarios, crear tokens, transferir, aceptar/rechazar transferencias
+- ✅ **Búsquedas avanzadas**: Filtrado por múltiples criterios simultáneos
+- ✅ **Mantenimiento de contexto**: Referencias inteligentes ("este usuario", "esta transferencia")
+- ✅ **Confirmaciones de transacciones**: Modal para acciones que requieren firma
+- ✅ **Manejo robusto de errores**: Timeouts, detección de conexión, mensajes descriptivos
+- ✅ **Integración con Ollama**: Soporte para modelos locales de LLM
 
 ## ✨ Mejoras Recientes (Diciembre 2024 - Enero 2025)
 

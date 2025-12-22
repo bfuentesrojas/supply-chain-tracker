@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { useWeb3 } from '@/contexts/Web3Context'
+import { getAddress } from 'ethers'
 import { 
   Token, 
   Transfer, 
@@ -86,16 +87,61 @@ export function useSupplyChain() {
       return null
     }
 
+    // Verificar que el contrato esté desplegado intentando leer una variable pública simple
     try {
+      await contract.nextTokenId()
+    } catch (err: any) {
+      // Si falla, el contrato probablemente no está desplegado
+      if (err.message && err.message.includes('could not decode result data')) {
+        console.warn('⚠️ El contrato parece no estar desplegado en', contract.target)
+        setError('El contrato no está desplegado en esta dirección. Por favor, despliega el contrato primero.')
+        return null
+      }
+      // Si es otro error, continuar normalmente
+    }
+
+    try {
+      // Normalizar la dirección usando getAddress para asegurar formato correcto
+      const normalizedAddress = getAddress(address)
+      
+      // Verificar primero si el usuario existe antes de llamar a getUserInfo
+      // Esto evita errores de decodificación cuando el usuario no está registrado
+      let userId: bigint | null = null;
+      try {
+        userId = await contract.addressToUserId(normalizedAddress)
+      } catch (err: any) {
+        // Si hay error al obtener userId, el usuario no existe
+        console.log('[DEBUG] useSupplyChain:getUserInfo:addressToUserIdError', {
+          error: err.message,
+          normalizedAddress
+        })
+        return null
+      }
+      
       // #region agent log
-      // Verificar otras funciones del contrato primero
-      let adminAddress = null, isAdminResult = null, addressUserId = null;
+      // Verificar otras funciones del contrato para debugging
+      let adminAddress = null;
       try { adminAddress = await contract.admin(); } catch(e) { adminAddress = 'ERROR: ' + (e instanceof Error ? e.message : String(e)); }
-      try { isAdminResult = await contract.isAdmin(address); } catch(e) { isAdminResult = 'ERROR: ' + (e instanceof Error ? e.message : String(e)); }
-      try { addressUserId = await contract.addressToUserId(address); } catch(e) { addressUserId = 'ERROR: ' + (e instanceof Error ? e.message : String(e)); }
-      console.log('[DEBUG] useSupplyChain:getUserInfo:beforeCall', {address, contractTarget: contract.target, adminAddress, isAdminResult, addressUserId: addressUserId?.toString?.() || addressUserId});
+      console.log('[DEBUG] useSupplyChain:getUserInfo:beforeCall', {
+        address, 
+        normalizedAddress, 
+        contractTarget: contract.target, 
+        adminAddress,
+        userId: userId?.toString() || '0',
+        userExists: userId && userId !== BigInt(0)
+      });
       // #endregion
-      const user = await contract.getUserInfo(address)
+      
+      if (!userId || userId === BigInt(0)) {
+        console.log('[DEBUG] useSupplyChain:getUserInfo:userNotRegistered', {
+          normalizedAddress,
+          adminAddress,
+          isPotentialAdmin: adminAddress && typeof adminAddress === 'string' && normalizedAddress.toLowerCase() === adminAddress.toLowerCase()
+        })
+        return null
+      }
+      
+      const user = await contract.getUserInfo(normalizedAddress)
       // #region agent log
       console.log('[DEBUG] useSupplyChain:getUserInfo:afterCall', {userId: user.id?.toString(), userAddress: user.userAddress, role: user.role, status: Number(user.status)});
       // #endregion
@@ -119,7 +165,21 @@ export function useSupplyChain() {
     if (!contract) return false
 
     try {
-      return await contract.isAdmin(address)
+      // Normalizar la dirección usando getAddress para asegurar formato correcto
+      const normalizedAddress = getAddress(address)
+      
+      // Obtener la dirección del admin del contrato
+      let adminAddress: string;
+      try {
+        adminAddress = await contract.admin()
+      } catch (err: any) {
+        // Si no se puede obtener admin, el contrato puede no estar desplegado
+        console.error('Error obteniendo dirección del admin:', err)
+        return false
+      }
+      
+      // Comparar direcciones (case-insensitive)
+      return normalizedAddress.toLowerCase() === adminAddress.toLowerCase()
     } catch (err) {
       console.error('Error verificando admin:', err)
       return false

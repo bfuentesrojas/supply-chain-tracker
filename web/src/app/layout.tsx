@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 import { Web3Provider } from '@/contexts/Web3Context'
 import { Navbar } from '@/components/Navbar'
+import { FloatingAssistantChat } from '@/components/FloatingAssistantChat'
 
 const inter = Inter({
   variable: '--font-geist-sans',
@@ -34,8 +35,10 @@ export default function RootLayout({
               {children}
             </main>
             <footer className="py-6 text-center text-surface-500 text-sm border-t border-surface-200">
-              <p>Supply Chain Tracker (c) 2025</p>
+              <p>Supply Chain Tracker © 2025</p>
             </footer>
+            {/* Chat flotante de asistente IA */}
+            <FloatingAssistantChat />
           </div>
         </Web3Provider>
       </body>

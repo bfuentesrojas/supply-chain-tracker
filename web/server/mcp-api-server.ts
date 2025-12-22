@@ -1,6 +1,6 @@
 /**
  * Servidor Express separado para APIs MCP Foundry Tools
- * Corre en el puerto 3002
+ * Corre en el puerto 3001
  */
 
 import express from 'express'
@@ -19,7 +19,7 @@ const execFileAsync = promisify(execFile)
 const execAsync = promisify(exec)
 
 const app = express()
-const PORT = 3002
+const PORT = 3001
 
 // Resolver el directorio del proyecto correctamente
 // Cuando se ejecuta desde web/, process.cwd() es web/
@@ -249,13 +249,176 @@ app.post('/forge/test', async (req, res) => {
   }
 })
 
-// Anvil Restart Schema
-const anvilRestartSchema = z.object({
+// Anvil Schema (usado por start y restart)
+const anvilSchema = z.object({
   host: z.string().optional().default('0.0.0.0'),
   port: z.number().min(1).max(65535).optional().default(8545),
   chainId: z.number().optional(),
   blockTime: z.number().optional(),
   extraArgs: z.array(z.string()).optional().default([])
+})
+
+// Anvil Start - Inicia Anvil solo si no está corriendo
+app.post('/anvil/start', async (req, res) => {
+  try {
+    // Verificar si ya está corriendo
+    const existingPid = await getAnvilPid()
+    const isResponding = await checkAnvilRunning()
+    
+    if (existingPid && isResponding) {
+      return res.json({
+        success: true,
+        message: 'Anvil ya está corriendo',
+        pid: existingPid,
+        port: 8545,
+        timestamp: new Date().toISOString()
+      })
+    }
+    
+    // Si hay un proceso pero no responde, detenerlo primero
+    if (existingPid && !isResponding) {
+      await stopAllAnvilProcesses()
+      await new Promise(resolve => setTimeout(resolve, 2000))
+    }
+    
+    const validated = anvilSchema.parse(req.body)
+    
+    // Construir argumentos
+    const args = [
+      '--host', validated.host,
+      '--port', validated.port.toString()
+    ]
+    
+    if (validated.chainId) {
+      args.push('--chain-id', validated.chainId.toString())
+    }
+    
+    if (validated.blockTime) {
+      args.push('--block-time', validated.blockTime.toString())
+    }
+    
+    // Agregar argumentos extra (sanitizados)
+    if (validated.extraArgs && validated.extraArgs.length > 0) {
+      const sanitized = sanitizeArgs(validated.extraArgs)
+      args.push(...sanitized)
+    }
+    
+    // Sanitizar todos los argumentos antes de ejecutar
+    const sanitizedArgs = sanitizeArgs(args)
+    
+    // Ejecutar anvil en background
+    const childProcess = execFile(
+      'anvil',
+      sanitizedArgs,
+      {
+        cwd: SC_DIR,
+        detached: true,
+        stdio: 'ignore'
+      }
+    )
+    
+    // Desconectar el proceso para que corra en background
+    childProcess.unref()
+    
+    // Esperar un momento y verificar que esté corriendo
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    const newPid = await getAnvilPid()
+    const newIsResponding = await checkAnvilRunning()
+    
+    if (!newPid || !newIsResponding) {
+      throw new Error('Anvil no se inició correctamente')
+    }
+    
+    res.json({
+      success: true,
+      message: 'Anvil iniciado correctamente',
+      pid: newPid,
+      port: validated.port,
+      host: validated.host,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Datos de entrada inválidos',
+        details: error.errors
+      })
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Error iniciando Anvil'
+    })
+  }
+})
+
+// Anvil Stop - Detiene todos los procesos Anvil
+app.post('/anvil/stop', async (req, res) => {
+  try {
+    const allPids = await getAllAnvilPids()
+    const isResponding = await checkAnvilRunning()
+    
+    if (allPids.length === 0 && !isResponding) {
+      return res.json({
+        success: true,
+        message: 'Anvil no está corriendo',
+        timestamp: new Date().toISOString()
+      })
+    }
+    
+    // Detener todos los procesos
+    const stopResult = await stopAllAnvilProcesses()
+    
+    // Verificar que todos se detuvieron
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    const finalPids = await getAllAnvilPids()
+    const finalIsResponding = await checkAnvilRunning()
+    
+    if (finalPids.length > 0 || finalIsResponding) {
+      // Intentar una última vez
+      await stopAllAnvilProcesses()
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      const secondCheckPids = await getAllAnvilPids()
+      const secondCheckResponding = await checkAnvilRunning()
+      
+      if (secondCheckPids.length > 0 || secondCheckResponding) {
+        return res.json({
+          success: false,
+          error: `No se pudieron detener todos los procesos Anvil. PIDs restantes: ${secondCheckPids.join(', ')}`,
+          stoppedPids: stopResult.stoppedPids,
+          remainingPids: secondCheckPids,
+          timestamp: new Date().toISOString()
+        })
+      }
+    }
+    
+    // Éxito
+    if (stopResult.errors.length > 0) {
+      return res.json({
+        success: true,
+        message: 'Anvil detenido correctamente (algunos errores menores fueron ignorados)',
+        stoppedPids: stopResult.stoppedPids,
+        warnings: stopResult.errors,
+        timestamp: new Date().toISOString()
+      })
+    }
+    
+    return res.json({
+      success: true,
+      message: 'Anvil detenido correctamente',
+      stoppedPids: stopResult.stoppedPids,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Error deteniendo Anvil',
+      timestamp: new Date().toISOString()
+    })
+  }
 })
 
 // Función auxiliar para detener todos los procesos Anvil
@@ -327,7 +490,7 @@ async function stopAllAnvilProcesses(): Promise<{ stoppedPids: number[]; errors:
 // Anvil Restart - Detiene todos los procesos Anvil y reinicia con un nuevo PID
 app.post('/anvil/restart', async (req, res) => {
   try {
-    const validated = anvilRestartSchema.parse(req.body)
+    const validated = anvilSchema.parse(req.body)
     
     // Paso 1: Detener todos los procesos Anvil existentes
     const oldPids = await getAllAnvilPids()
@@ -514,6 +677,218 @@ app.post('/cast/call', async (req, res) => {
   }
 })
 
+// Forge Script Fund Accounts
+const fundAccountsSchema = z.object({
+  rpcUrl: z.string().url().optional().default('http://127.0.0.1:8545'),
+  privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Clave privada inválida').optional()
+})
+
+app.post('/forge/script/fund', async (req, res) => {
+  try {
+    const validated = fundAccountsSchema.parse(req.body)
+    
+    // Verificar que Anvil esté corriendo antes de intentar fondear
+    const anvilRunning = await checkAnvilRunning()
+    if (!anvilRunning) {
+      return res.status(400).json({
+        success: false,
+        error: 'Anvil no está corriendo. Por favor, inicia Anvil primero usando el endpoint /anvil/start',
+        details: {
+          rpcUrl: validated.rpcUrl,
+          suggestion: 'Usa el endpoint POST /anvil/start para iniciar Anvil antes de fondear cuentas'
+        }
+      })
+    }
+    
+    // Construir argumentos para ejecutar el script
+    const args = [
+      'script',
+      'script/FundAccounts.s.sol:FundAccountsScript',
+      '--rpc-url', validated.rpcUrl,
+      '--broadcast'
+    ]
+    
+    // Si se proporciona una clave privada personalizada, agregarla
+    if (validated.privateKey) {
+      args.push('--private-key', validated.privateKey)
+    }
+    
+    // Ejecutar comando
+    const result = await executeFoundryCommand('forge', args, {
+      timeout: 60000 // 60 segundos
+    })
+    
+    // Intentar extraer información de las transacciones
+    const txHashes = result.stdout.match(/0x[a-fA-F0-9]{64}/g) || []
+    
+    res.json({
+      success: true,
+      command: `forge ${args.join(' ')}`,
+      transactionHashes: txHashes,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Datos de entrada inválidos',
+        details: error.errors
+      })
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Error ejecutando script de funding'
+    })
+  }
+})
+
+// Forge Script Deploy
+const deploySchema = z.object({
+  rpcUrl: z.string().url().optional().default('http://127.0.0.1:8545'),
+  privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Clave privada inválida').optional()
+})
+
+app.post('/forge/script/deploy', async (req, res) => {
+  try {
+    const validated = deploySchema.parse(req.body)
+    
+    // Verificar que Anvil esté corriendo antes de intentar desplegar
+    const anvilRunning = await checkAnvilRunning()
+    if (!anvilRunning) {
+      return res.status(400).json({
+        success: false,
+        error: 'Anvil no está corriendo. Por favor, inicia Anvil primero usando el endpoint /anvil/start',
+        details: {
+          rpcUrl: validated.rpcUrl,
+          suggestion: 'Usa el endpoint POST /anvil/start para iniciar Anvil antes de desplegar el contrato'
+        }
+      })
+    }
+    
+    // Construir argumentos para ejecutar el script de despliegue
+    const args = [
+      'script',
+      'script/Deploy.s.sol:DeployScript',
+      '--rpc-url', validated.rpcUrl,
+      '--broadcast'
+    ]
+    
+    // Si se proporciona una clave privada personalizada, agregarla
+    if (validated.privateKey) {
+      args.push('--private-key', validated.privateKey)
+    }
+    
+    // Ejecutar comando
+    const result = await executeFoundryCommand('forge', args, {
+      timeout: 60000 // 60 segundos
+    })
+    
+    // Intentar extraer la dirección del contrato desplegado
+    // El script imprime: "SupplyChain deployed at: 0x..."
+    const deployedAddressMatch = result.stdout.match(/SupplyChain deployed at:\s*(0x[a-fA-F0-9]{40})/i)
+    const deployedAddress = deployedAddressMatch ? deployedAddressMatch[1] : null
+    
+    // Intentar extraer información de las transacciones
+    const txHashes = result.stdout.match(/0x[a-fA-F0-9]{64}/g) || []
+    
+    res.json({
+      success: true,
+      command: `forge ${args.join(' ')}`,
+      contractAddress: deployedAddress,
+      transactionHashes: txHashes,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Datos de entrada inválidos',
+        details: error.errors
+      })
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Error ejecutando script de despliegue'
+    })
+  }
+})
+
+// Fund Account (fondear una dirección específica usando cast send)
+const fundAccountSchema = z.object({
+  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Dirección inválida'),
+  amount: z.string().regex(/^\d+(\.\d+)?(ether|gwei|wei)?$/, 'Cantidad inválida (ej: "10ether", "1000gwei", "10000000000000000000wei")'),
+  privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Clave privada inválida').optional().default('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'),
+  rpcUrl: z.string().url().optional().default('http://127.0.0.1:8545')
+})
+
+app.post('/anvil/fund', async (req, res) => {
+  try {
+    const validated = fundAccountSchema.parse(req.body)
+    
+    // Verificar que Anvil esté corriendo antes de intentar fondear
+    const anvilRunning = await checkAnvilRunning()
+    if (!anvilRunning) {
+      return res.status(400).json({
+        success: false,
+        error: 'Anvil no está corriendo. Por favor, inicia Anvil primero usando el endpoint /anvil/start',
+        details: {
+          rpcUrl: validated.rpcUrl,
+          address: validated.address,
+          suggestion: 'Usa el endpoint POST /anvil/start para iniciar Anvil antes de fondear cuentas'
+        }
+      })
+    }
+    
+    // Construir argumentos para cast send
+    // Formato: cast send <address> --value <amount> --private-key <key> --rpc-url <url>
+    const args = [
+      'send',
+      validated.address,
+      '--value', validated.amount,
+      '--private-key', validated.privateKey,
+      '--rpc-url', validated.rpcUrl
+    ]
+    
+    // Ejecutar comando
+    const result = await executeFoundryCommand('cast', args, {
+      timeout: 30000 // 30 segundos
+    })
+    
+    // Intentar extraer hash de transacción
+    const txHash = extractTxHash(result.stdout)
+    
+    res.json({
+      success: true,
+      command: `cast ${args.join(' ')}`,
+      address: validated.address,
+      amount: validated.amount,
+      transactionHash: txHash,
+      stdout: result.stdout,
+      stderr: result.stderr,
+      timestamp: new Date().toISOString()
+    })
+  } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        success: false,
+        error: 'Datos de entrada inválidos',
+        details: error.errors
+      })
+    }
+    
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Error fondeando cuenta'
+    })
+  }
+})
+
 // Cast Send
 const castSendSchema = z.object({
   address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, 'Dirección inválida'),
@@ -606,9 +981,16 @@ app.listen(PORT, () => {
   console.log(`   GET  /health`)
   console.log(`   POST /forge/build`)
   console.log(`   POST /forge/test`)
+  console.log(`   POST /forge/script/deploy`)
+  console.log(`   POST /forge/script/fund`)
+  console.log(`   POST /anvil/start`)
+  console.log(`   POST /anvil/stop`)
   console.log(`   POST /anvil/restart`)
+  console.log(`   POST /anvil/fund`)
   console.log(`   POST /cast/call`)
   console.log(`   POST /cast/send`)
 })
+
+
 
 

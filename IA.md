@@ -866,7 +866,7 @@ Esta función:
 
 | Tarea | Tiempo Estimado |
 |-------|-----------------|
-| Creación de servidor Express para APIs MCP (puerto 3002) | 15 min |
+| Creación de servidor Express para APIs MCP (puerto 3001) | 15 min |
 | Implementación de endpoints Foundry (forge/build, forge/test) | 10 min |
 | Implementación de endpoint anvil/restart (reemplazo de start/stop) | 20 min |
 | Implementación de endpoints cast/call y cast/send | 15 min |
@@ -881,7 +881,7 @@ Esta función:
 
 | Tarea | Tiempo Estimado |
 |-------|-----------------|
-| Creación de página /tools para interfaz MCP (puerto 3001) | 25 min |
+| Creación de página /tools para interfaz MCP (integradas en puerto 3000) | 25 min |
 | Implementación de componentes UI para cada herramienta | 20 min |
 | Integración de llamadas a API MCP | 15 min |
 | Mejoras de UI para mostrar resultados detallados | 12 min |
@@ -891,9 +891,9 @@ Esta función:
 ### Funcionalidades Implementadas
 
 1. **Sistema MCP (Model Context Protocol)**:
-   - Servidor Express.js separado en puerto 3002 para APIs MCP
-   - Frontend Next.js en puerto 3001 para herramientas
-   - Arquitectura separada: dApp (3000), Tools (3001), API (3002)
+   - Servidor Express.js separado en puerto 3001 para APIs MCP
+   - Frontend Next.js integrado en puerto 3000 (dApp en /, Tools en /tools)
+   - Arquitectura: dApp + Tools (3000), API MCP (3001)
 
 2. **Endpoints de API MCP**:
    - `GET /health`: Verifica estado de herramientas Foundry y Anvil
@@ -961,6 +961,111 @@ Esta función:
 | Tipos de token pharma | 5 |
 | Validadores Zod | 8 |
 | Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall, MCP Tools |
+
+---
+
+## 2.14. Asistente de IA Integrado (Enero 2025)
+
+### Cambios en Backend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Creación de endpoint `/api/assistant` para integración con Ollama | 20 min |
+| Implementación de herramientas (tools) para LLM | 15 min |
+| Implementación de funciones de consulta (get_token_status, get_user_info, list_all_users) | 25 min |
+| Implementación de funciones de acción (change_user_status, create_token, transfer_token) | 30 min |
+| Implementación de funciones de transferencias (accept_transfer, reject_transfer) | 15 min |
+| Mejora de prompt del sistema con información completa | 20 min |
+| Manejo de errores y timeouts | 15 min |
+| Endpoint de confirmación para transacciones (`/api/assistant/confirm`) | 20 min |
+| **Total Backend** | **~160 minutos** |
+
+### Cambios en Frontend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Creación de componente FloatingAssistantChat | 25 min |
+| Integración en layout global | 5 min |
+| Mejoras de UI (ancho del chat, animaciones) | 10 min |
+| Manejo de confirmaciones de transacciones | 15 min |
+| **Total Frontend** | **~55 minutos** |
+
+### Funcionalidades Implementadas
+
+1. **Asistente de IA con Ollama**:
+   - Integración con Ollama para procesamiento de lenguaje natural
+   - Chat flotante disponible en todas las páginas
+   - Interfaz moderna con animaciones
+
+2. **Herramientas de Consulta**:
+   - `get_token_status`: Información completa de tokens por ID
+   - `list_all_tokens`: Lista todos los tokens con filtrado
+   - `get_user_info`: Información de usuarios por dirección
+   - `list_all_users`: Lista todos los usuarios con filtrado
+   - `get_transfer_info`: Información de transferencias por ID
+   - `list_all_transfers`: Lista todas las transferencias
+   - `get_user_tokens`: Tokens de un usuario específico
+   - `get_user_transfers`: Transferencias de un usuario
+   - `get_system_stats`: Estadísticas generales del sistema
+
+3. **Herramientas de Acción** (requieren confirmación):
+   - `change_user_status`: Cambiar estado de usuarios (solo admin)
+   - `create_token`: Crear tokens de cualquier tipo
+   - `transfer_token`: Crear solicitudes de transferencia
+   - `accept_transfer`: Aceptar transferencias pendientes
+   - `reject_transfer`: Rechazar transferencias pendientes
+
+4. **Capacidades del Asistente**:
+   - Consultas sobre usuarios, tokens, transferencias
+   - Búsquedas con múltiples criterios (rol Y estado, tipo Y recall, etc.)
+   - Explicaciones del funcionamiento del sistema
+   - Ejecución de acciones sobre el contrato
+   - Mantenimiento de contexto de conversación
+   - Manejo inteligente de referencias ("este usuario", "esta transferencia")
+
+5. **Mejoras en Manejo de Errores**:
+   - Timeout de 60 segundos para llamadas a Ollama
+   - Detección de errores de conexión
+   - Mensajes de error descriptivos
+   - Health check opcional de Ollama
+
+### Resumen de Sesión 10
+
+| Componente | Tiempo |
+|------------|--------|
+| Backend (API Assistant) | ~160 min |
+| Frontend (FloatingAssistantChat) | ~55 min |
+| Documentación | ~10 min |
+| **Total Sesión 10** | **~225 minutos (~3h 45min)** |
+
+### Resumen Total Actualizado
+
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Sesión 8 | Sesión 9 | Sesión 10 | Total |
+|------------|----------|----------|----------|----------|----------|----------|----------|----------|----------|-----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~43 min | ~30 min | - | - | **~139 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~52 min | ~57 min | ~80 min | ~55 min | **~589 min** |
+| Backend/APIs | - | - | - | - | - | - | - | - | ~103 min | ~160 min | **~263 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | ~5 min | ~10 min | ~10 min | **~65 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~100 min** | **~92 min** | **~193 min** | **~225 min** | **~1,061 min (~17h 41min)** |
+
+### Estadísticas Finales Actualizadas
+
+| Métrica | Valor |
+|---------|-------|
+| Tiempo total de desarrollo | ~17h 41min |
+| Sesiones de desarrollo | 10 |
+| Archivos de código creados | 100+ |
+| Líneas de código totales | ~18,000+ |
+| Tests unitarios | 55 (todos pasando) |
+| Páginas del frontend | 7 (incluye /tools) |
+| Componentes React | 13+ |
+| Hooks personalizados | 1 |
+| Contratos Solidity | 1 |
+| APIs REST | 8 endpoints (6 MCP + 2 Assistant) |
+| Tipos de token pharma | 5 |
+| Validadores Zod | 8 |
+| Herramientas de IA | 9 herramientas |
+| Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall, MCP Tools, Asistente de IA |
 
 ---
 

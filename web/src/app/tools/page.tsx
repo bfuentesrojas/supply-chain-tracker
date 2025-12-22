@@ -2,8 +2,18 @@
 
 import { useState } from 'react'
 
-// URL base de la API MCP (puerto 3002)
-const MCP_API_BASE = 'http://localhost:3002'
+// URL base de la API MCP (puerto 3001)
+const MCP_API_BASE = 'http://localhost:3001'
+
+// Cuentas utilizadas en el dapp de track
+const DAPP_ACCOUNTS = [
+  { value: '0xeD252BAc2D88971cb5B393B0760f05AF27413b91', label: 'Admin (0xeD25...13b91)' },
+  { value: '0xBc52603F93d9df628b2dAd74e588fE74FF2f6056', label: 'Cuenta 1 (0xBc52...f6056)' },
+  { value: '0x871fD3E66cCC4c21E3AC437D39266e72e6fD32A0', label: 'Cuenta 2 (0x871f...f32A0)' },
+  { value: '0x8816F96a8759Ff0410F5A67457DDe003950360a6', label: 'Cuenta 3 (0x8816...360a6)' },
+  { value: '0x44ECBB8c87991Bbee768ef0C9e2731753a4B714b', label: 'Cuenta 4 (0x44EC...B714b)' },
+  { value: 'other', label: 'Otra cuenta' }
+] as const
 
 interface ApiResponse {
   success: boolean
@@ -16,6 +26,7 @@ export default function ToolsPage() {
   const [health, setHealth] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [results, setResults] = useState<Record<string, ApiResponse>>({})
+  const [selectedAccount, setSelectedAccount] = useState<string>('')
 
   // Health check
   const checkHealth = async () => {
@@ -120,6 +131,64 @@ export default function ToolsPage() {
       setResults(prev => ({ ...prev, castCall: { success: false, error: error.message } }))
     } finally {
       setLoading(prev => ({ ...prev, castCall: false }))
+    }
+  }
+
+  // Fund Accounts Script
+  const handleFundAccountsScript = async (rpcUrl: string = 'http://127.0.0.1:8545', privateKey?: string) => {
+    setLoading(prev => ({ ...prev, fundAccounts: true }))
+    try {
+      const body: any = { rpcUrl }
+      if (privateKey) {
+        body.privateKey = privateKey
+      }
+      
+      const res = await fetch(`${MCP_API_BASE}/forge/script/fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const data = await res.json()
+      setResults(prev => ({ ...prev, fundAccounts: data }))
+      
+      // Si hay un error, mostrar sugerencia
+      if (!data.success && data.error && data.error.includes('no está corriendo')) {
+        // Mostrar mensaje adicional en la UI
+        console.warn('Anvil no está corriendo. Por favor inicia Anvil primero.')
+      }
+    } catch (error: any) {
+      setResults(prev => ({ ...prev, fundAccounts: { success: false, error: error.message || 'Error de conexión con el servidor MCP API' } }))
+    } finally {
+      setLoading(prev => ({ ...prev, fundAccounts: false }))
+    }
+  }
+
+  // Fund Account (dirección específica)
+  const handleFundAccount = async (
+    address: string,
+    amount: string,
+    privateKey: string = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+    rpcUrl: string = 'http://127.0.0.1:8545'
+  ) => {
+    setLoading(prev => ({ ...prev, fundAccount: true }))
+    try {
+      const res = await fetch(`${MCP_API_BASE}/anvil/fund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, amount, privateKey, rpcUrl })
+      })
+      const data = await res.json()
+      setResults(prev => ({ ...prev, fundAccount: data }))
+      
+      // Si hay un error, mostrar sugerencia
+      if (!data.success && data.error && data.error.includes('no está corriendo')) {
+        // Mostrar mensaje adicional en la UI
+        console.warn('Anvil no está corriendo. Por favor inicia Anvil primero.')
+      }
+    } catch (error: any) {
+      setResults(prev => ({ ...prev, fundAccount: { success: false, error: error.message || 'Error de conexión con el servidor MCP API' } }))
+    } finally {
+      setLoading(prev => ({ ...prev, fundAccount: false }))
     }
   }
 
@@ -545,11 +614,239 @@ export default function ToolsPage() {
               )}
             </div>
           </div>
+
+          {/* Fund Accounts Script */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-surface-800 mb-2">Fondear Cuentas (Script)</h2>
+            <p className="text-sm text-surface-600 mb-4">Ejecuta el script FundAccounts.s.sol para fondear las cuentas predefinidas del proyecto con 10 ETH cada una.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="label">RPC URL</label>
+                <input
+                  type="text"
+                  id="fundScriptRpc"
+                  defaultValue="http://127.0.0.1:8545"
+                  className="input-field font-mono text-sm"
+                />
+              </div>
+              <div>
+                <label className="label">Clave Privada (opcional)</label>
+                <input
+                  type="password"
+                  id="fundScriptPrivateKey"
+                  placeholder="Dejar vacío para usar la cuenta 0 de Anvil"
+                  className="input-field font-mono text-sm"
+                />
+                <p className="text-xs text-surface-500 mt-1">Por defecto usa: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80</p>
+              </div>
+              <button
+                onClick={() => {
+                  const rpc = (document.getElementById('fundScriptRpc') as HTMLInputElement)?.value || 'http://127.0.0.1:8545'
+                  const privateKey = (document.getElementById('fundScriptPrivateKey') as HTMLInputElement)?.value || undefined
+                  handleFundAccountsScript(rpc, privateKey)
+                }}
+                disabled={loading.fundAccounts}
+                className="btn-primary w-full"
+              >
+                {loading.fundAccounts ? 'Fondeando...' : 'Fondear Cuentas Predefinidas'}
+              </button>
+              {results.fundAccounts && (
+                <div className={`p-4 rounded-lg mt-4 ${results.fundAccounts.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="text-sm">
+                    {results.fundAccounts.success ? (
+                      <>
+                        <div className="font-semibold text-green-800 mb-2">✅ Cuentas fondeadas correctamente</div>
+                        {results.fundAccounts.transactionHashes && results.fundAccounts.transactionHashes.length > 0 && (
+                          <div className="mt-2">
+                            <strong>Hashes de transacciones:</strong>
+                            <ul className="mt-1 space-y-1">
+                              {results.fundAccounts.transactionHashes.map((hash: string, idx: number) => (
+                                <li key={idx} className="font-mono text-xs">{hash}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {results.fundAccounts.stdout && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-sm font-medium">Ver output completo</summary>
+                            <pre className="text-xs mt-2 overflow-auto max-h-64 bg-white p-2 rounded">{results.fundAccounts.stdout}</pre>
+                          </details>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-red-600 mb-2">{results.fundAccounts.error}</div>
+                        {results.fundAccounts.details && results.fundAccounts.details.suggestion && (
+                          <div className="text-xs text-yellow-700 bg-yellow-50 p-2 rounded mt-2">
+                            💡 <strong>Sugerencia:</strong> {results.fundAccounts.details.suggestion}
+                          </div>
+                        )}
+                        {results.fundAccounts.error && results.fundAccounts.error.includes('no está corriendo') && (
+                          <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded mt-2">
+                            💡 Puedes iniciar Anvil usando la sección <strong>"Anvil Restart"</strong> arriba
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Fund Account (dirección específica) */}
+          <div className="card">
+            <h2 className="text-xl font-semibold text-surface-800 mb-2">Fondear Cuenta</h2>
+            <p className="text-sm text-surface-600 mb-4">Envía ETH a una cuenta del dapp o a una dirección personalizada usando cast send.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="label">Seleccionar Cuenta</label>
+                <select
+                  id="fundAccountSelect"
+                  value={selectedAccount}
+                  onChange={(e) => {
+                    setSelectedAccount(e.target.value)
+                    // Limpiar el input de dirección personalizada si no es "otra cuenta"
+                    if (e.target.value !== 'other') {
+                      const customAddressInput = document.getElementById('fundCustomAddress') as HTMLInputElement
+                      if (customAddressInput) {
+                        customAddressInput.value = ''
+                      }
+                    }
+                  }}
+                  className="input-field font-mono text-sm"
+                >
+                  <option value="">-- Seleccionar cuenta --</option>
+                  {DAPP_ACCOUNTS.map((account) => (
+                    <option key={account.value} value={account.value}>
+                      {account.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedAccount === 'other' && (
+                <div>
+                  <label className="label">Dirección Personalizada</label>
+                  <input
+                    type="text"
+                    id="fundCustomAddress"
+                    placeholder="0x..."
+                    className="input-field font-mono text-sm"
+                  />
+                  <p className="text-xs text-surface-500 mt-1">Ingresa la dirección de la cuenta a fondear</p>
+                </div>
+              )}
+              <div>
+                <label className="label">Cantidad</label>
+                <input
+                  type="text"
+                  id="fundAmount"
+                  placeholder="10ether"
+                  defaultValue="10ether"
+                  className="input-field font-mono text-sm"
+                />
+                <p className="text-xs text-surface-500 mt-1">Ejemplos: "10ether", "1000gwei", "10000000000000000000wei"</p>
+              </div>
+              <div>
+                <label className="label">Clave Privada (opcional)</label>
+                <input
+                  type="password"
+                  id="fundPrivateKey"
+                  placeholder="Dejar vacío para usar cuenta 0 de Anvil"
+                  className="input-field font-mono text-sm"
+                />
+                <p className="text-xs text-surface-500 mt-1">Por defecto: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80</p>
+              </div>
+              <div>
+                <label className="label">RPC URL</label>
+                <input
+                  type="text"
+                  id="fundRpc"
+                  defaultValue="http://127.0.0.1:8545"
+                  className="input-field font-mono text-sm"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  let address: string = ''
+                  
+                  if (selectedAccount === 'other') {
+                    // Si es "otra cuenta", tomar la dirección del input personalizado
+                    const customAddress = (document.getElementById('fundCustomAddress') as HTMLInputElement)?.value.trim() || ''
+                    if (!customAddress) {
+                      alert('Por favor, ingresa una dirección personalizada')
+                      return
+                    }
+                    // Validar formato de dirección
+                    if (!/^0x[a-fA-F0-9]{40}$/.test(customAddress)) {
+                      alert('Dirección inválida. Debe tener formato 0x seguido de 40 caracteres hexadecimales')
+                      return
+                    }
+                    address = customAddress
+                  } else if (selectedAccount) {
+                    // Si es una cuenta del dapp, usar la seleccionada
+                    address = selectedAccount
+                  } else {
+                    alert('Por favor, selecciona una cuenta')
+                    return
+                  }
+                  
+                  const amount = (document.getElementById('fundAmount') as HTMLInputElement)?.value || '10ether'
+                  const privateKey = (document.getElementById('fundPrivateKey') as HTMLInputElement)?.value || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+                  const rpc = (document.getElementById('fundRpc') as HTMLInputElement)?.value || 'http://127.0.0.1:8545'
+                  
+                  handleFundAccount(address, amount, privateKey, rpc)
+                }}
+                disabled={loading.fundAccount}
+                className="btn-primary w-full"
+              >
+                {loading.fundAccount ? 'Fondeando...' : 'Fondear Cuenta'}
+              </button>
+              {results.fundAccount && (
+                <div className={`p-4 rounded-lg mt-4 ${results.fundAccount.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className="text-sm">
+                    {results.fundAccount.success ? (
+                      <>
+                        <div className="font-semibold text-green-800 mb-2">✅ Cuenta fondeada correctamente</div>
+                        <div className="mt-1 text-green-700"><strong>Dirección:</strong> {results.fundAccount.address}</div>
+                        <div className="mt-1 text-green-700"><strong>Cantidad:</strong> {results.fundAccount.amount}</div>
+                        {results.fundAccount.transactionHash && (
+                          <div className="mt-1 text-green-700"><strong>Hash de transacción:</strong> <span className="font-mono text-xs">{results.fundAccount.transactionHash}</span></div>
+                        )}
+                        {results.fundAccount.stdout && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-sm font-medium">Ver output completo</summary>
+                            <pre className="text-xs mt-2 overflow-auto max-h-64 bg-white p-2 rounded">{results.fundAccount.stdout}</pre>
+                          </details>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-red-600 mb-2">{results.fundAccount.error}</div>
+                        {results.fundAccount.details && results.fundAccount.details.suggestion && (
+                          <div className="text-xs text-yellow-700 bg-yellow-50 p-2 rounded mt-2">
+                            💡 <strong>Sugerencia:</strong> {results.fundAccount.details.suggestion}
+                          </div>
+                        )}
+                        {results.fundAccount.error && results.fundAccount.error.includes('no está corriendo') && (
+                          <div className="text-xs text-blue-700 bg-blue-50 p-2 rounded mt-2">
+                            💡 Puedes iniciar Anvil usando la sección <strong>"Anvil Restart"</strong> arriba
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
+
+
 
 
 

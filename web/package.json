@@ -4,11 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:tools": "next dev -p 3001",
     "dev:mcp-api": "tsx watch server/mcp-api-server.ts",
     "build": "next build",
     "start": "next start",
-    "start:tools": "next start -p 3001",
     "start:mcp-api": "tsx server/mcp-api-server.ts",
     "lint": "next lint"
   },

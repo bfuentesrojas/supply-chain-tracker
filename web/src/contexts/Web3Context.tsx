@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
-import { BrowserProvider, Contract, Signer } from 'ethers'
+import { BrowserProvider, Contract, Signer, getAddress } from 'ethers'
 import { SUPPLY_CHAIN_ABI, CONTRACT_ADDRESS, EXPECTED_CHAIN_ID, ANVIL_NETWORK_CONFIG } from '@/contracts/SupplyChain'
 import { parseTransactionError } from '@/lib/errorHandler'
 
@@ -66,7 +66,8 @@ export function Web3Provider({ children }: Web3ProviderProps) {
       setProvider(browserProvider)
       setSigner(userSigner)
       setContract(supplyChainContract)
-      setAccount(selectedAccount.toLowerCase())
+      // Normalizar la dirección usando getAddress para asegurar formato correcto
+      setAccount(getAddress(selectedAccount))
       setChainId(Number(network.chainId))
       setError(null)
 

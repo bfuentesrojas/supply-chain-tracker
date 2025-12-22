@@ -134,28 +134,48 @@ contract SupplyChain {
     
     /// @dev Solo el administrador puede ejecutar
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Solo el admin puede ejecutar esta funcion");
+        _onlyAdmin();
         _;
     }
 
     /// @dev Solo usuarios aprobados pueden ejecutar
     modifier onlyApprovedUser() {
-        uint256 userId = addressToUserId[msg.sender];
-        require(userId != 0, "Usuario no registrado");
-        require(users[userId].status == UserStatus.Approved, "Usuario no aprobado");
+        _onlyApprovedUser();
         _;
     }
 
     /// @dev Verifica que el token exista
     modifier tokenExists(uint256 tokenId) {
-        require(tokenId > 0 && tokenId < nextTokenId, "Token no existe");
+        _tokenExists(tokenId);
         _;
     }
 
     /// @dev Verifica que la transferencia exista
     modifier transferExists(uint256 transferId) {
-        require(transferId > 0 && transferId < nextTransferId, "Transferencia no existe");
+        _transferExists(transferId);
         _;
+    }
+
+    /// @dev Función interna para verificar que es admin
+    function _onlyAdmin() internal view {
+        require(msg.sender == admin, "Solo el admin puede ejecutar esta funcion");
+    }
+
+    /// @dev Función interna para verificar que el usuario está aprobado
+    function _onlyApprovedUser() internal view {
+        uint256 userId = addressToUserId[msg.sender];
+        require(userId != 0, "Usuario no registrado");
+        require(users[userId].status == UserStatus.Approved, "Usuario no aprobado");
+    }
+
+    /// @dev Función interna para verificar que el token existe
+    function _tokenExists(uint256 tokenId) internal view {
+        require(tokenId > 0 && tokenId < nextTokenId, "Token no existe");
+    }
+
+    /// @dev Función interna para verificar que la transferencia existe
+    function _transferExists(uint256 transferId) internal view {
+        require(transferId > 0 && transferId < nextTransferId, "Transferencia no existe");
     }
 
     // ============ Constructor ============

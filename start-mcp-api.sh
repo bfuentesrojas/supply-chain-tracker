@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script para iniciar el servidor de APIs MCP en el puerto 3002
+# Script para iniciar el servidor de APIs MCP en el puerto 3001
 
 set -e
 
@@ -29,8 +29,8 @@ if [ ! -d "web/node_modules" ]; then
     cd ..
 fi
 
-# Iniciar el servidor en el puerto 3002
-echo -e "${GREEN}Iniciando servidor en http://localhost:3002${NC}"
+# Iniciar el servidor en el puerto 3001
+echo -e "${GREEN}Iniciando servidor en http://localhost:3001${NC}"
 echo -e "${YELLOW}Presiona Ctrl+C para detener${NC}"
 echo ""
 
