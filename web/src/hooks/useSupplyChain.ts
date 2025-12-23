@@ -133,11 +133,23 @@ export function useSupplyChain() {
       // #endregion
       
       if (!userId || userId === BigInt(0)) {
+        // Verificar si es el admin pero no está registrado como usuario
+        let isAdminButNotRegistered = false
+        if (adminAddress && typeof adminAddress === 'string') {
+          isAdminButNotRegistered = normalizedAddress.toLowerCase() === adminAddress.toLowerCase()
+        }
+        
         console.log('[DEBUG] useSupplyChain:getUserInfo:userNotRegistered', {
           normalizedAddress,
           adminAddress,
-          isPotentialAdmin: adminAddress && typeof adminAddress === 'string' && normalizedAddress.toLowerCase() === adminAddress.toLowerCase()
+          isPotentialAdmin: isAdminButNotRegistered
         })
+        
+        // Si es admin pero no está registrado, esto es un problema
+        if (isAdminButNotRegistered) {
+          console.warn('[WARNING] El admin no está registrado como usuario en el contrato. Esto puede indicar que el contrato no se desplegó correctamente o que el admin no se registró en el constructor.')
+        }
+        
         return null
       }
       
@@ -162,26 +174,36 @@ export function useSupplyChain() {
 
   // Verificar si es admin
   const isAdmin = useCallback(async (address: string): Promise<boolean> => {
-    if (!contract) return false
+    if (!contract) {
+      console.log('[DEBUG] isAdmin: No hay contrato disponible')
+      return false
+    }
 
     try {
       // Normalizar la dirección usando getAddress para asegurar formato correcto
       const normalizedAddress = getAddress(address)
+      console.log('[DEBUG] isAdmin: Verificando admin para dirección:', normalizedAddress)
       
       // Obtener la dirección del admin del contrato
       let adminAddress: string;
       try {
         adminAddress = await contract.admin()
+        console.log('[DEBUG] isAdmin: Dirección del admin en el contrato:', adminAddress)
       } catch (err: any) {
         // Si no se puede obtener admin, el contrato puede no estar desplegado
-        console.error('Error obteniendo dirección del admin:', err)
+        console.error('[DEBUG] isAdmin: Error obteniendo dirección del admin:', err)
         return false
       }
       
       // Comparar direcciones (case-insensitive)
-      return normalizedAddress.toLowerCase() === adminAddress.toLowerCase()
+      const isAdminResult = normalizedAddress.toLowerCase() === adminAddress.toLowerCase()
+      console.log('[DEBUG] isAdmin: Resultado de verificación:', isAdminResult, {
+        normalizedAddress: normalizedAddress.toLowerCase(),
+        adminAddress: adminAddress.toLowerCase()
+      })
+      return isAdminResult
     } catch (err) {
-      console.error('Error verificando admin:', err)
+      console.error('[DEBUG] isAdmin: Error verificando admin:', err)
       return false
     }
   }, [contract])

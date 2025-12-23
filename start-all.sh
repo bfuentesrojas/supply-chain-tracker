@@ -281,3 +281,6 @@ echo ""
 
 cd "$WEB_DIR"
 npx next dev -p $FRONTEND_PORT
+
+
+

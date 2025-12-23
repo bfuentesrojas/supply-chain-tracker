@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useWeb3 } from '@/contexts/Web3Context'
+import { Contract } from 'ethers'
+import { SUPPLY_CHAIN_ABI, CONTRACT_ADDRESS } from '@/contracts/SupplyChain'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -15,7 +17,7 @@ interface ConfirmationAction {
 }
 
 export function FloatingAssistantChat() {
-  const { account } = useWeb3()
+  const { account, signer, contract: web3Contract } = useWeb3()
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -25,6 +27,9 @@ export function FloatingAssistantChat() {
   const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  // Obtener el modelo desde variables de entorno
+  const llmModel = process.env.NEXT_PUBLIC_LLM_MODEL || 'llama3.2'
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -52,6 +57,10 @@ export function FloatingAssistantChat() {
     setError(null)
 
     try {
+      // Crear AbortController con timeout de 210 segundos (3.5 minutos, más que el backend de 180s)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 210000) // 210 segundos (3.5 minutos)
+
       const response = await fetch('/api/assistant', {
         method: 'POST',
         headers: {
@@ -60,8 +69,11 @@ export function FloatingAssistantChat() {
         body: JSON.stringify({
           message: userMessage.content,
           userAddress: account || undefined
-        })
+        }),
+        signal: controller.signal
       })
+
+      clearTimeout(timeoutId)
 
       const data = await response.json()
 
@@ -89,13 +101,20 @@ export function FloatingAssistantChat() {
         throw new Error(data.error || 'Error desconocido')
       }
     } catch (err: any) {
-      setError(err.message || 'Error al enviar mensaje')
-      const errorMessage: Message = {
+      let errorMessage = err.message || 'Error al enviar mensaje'
+      
+      // Manejar errores de timeout específicamente
+      if (err.name === 'AbortError' || err.message?.includes('timeout') || err.message?.includes('tiempo de espera')) {
+        errorMessage = 'La solicitud tardó demasiado tiempo (más de 3 minutos). Esto puede ocurrir con consultas complejas. Intenta reformular tu pregunta o verifica que Ollama tenga suficientes recursos.'
+      }
+      
+      setError(errorMessage)
+      const assistantErrorMessage: Message = {
         role: 'assistant',
-        content: `❌ Error: ${err.message || 'No se pudo procesar tu solicitud'}`,
+        content: `❌ Error: ${errorMessage}`,
         timestamp: new Date()
       }
-      setMessages(prev => [...prev, errorMessage])
+      setMessages(prev => [...prev, assistantErrorMessage])
     } finally {
       setIsLoading(false)
       inputRef.current?.focus()
@@ -105,10 +124,24 @@ export function FloatingAssistantChat() {
   const handleConfirm = async () => {
     if (!confirmationAction) return
 
+    // Verificar que el usuario esté conectado
+    if (!account || !signer) {
+      const errorMessage: Message = {
+        role: 'assistant',
+        content: '❌ Error: Debes estar conectado con MetaMask para ejecutar esta transacción.',
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+      setShowConfirmation(false)
+      setConfirmationAction(null)
+      return
+    }
+
     setIsLoading(true)
     setShowConfirmation(false)
 
     try {
+      // Validar datos con el endpoint
       const response = await fetch('/api/assistant/confirm', {
         method: 'POST',
         headers: {
@@ -120,24 +153,100 @@ export function FloatingAssistantChat() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Error confirmando transacción')
+        throw new Error(data.error || 'Error validando transacción')
       }
 
-      if (data.success) {
-        const successMessage: Message = {
-          role: 'assistant',
-          content: `✅ ${data.message}\n📋 Hash de transacción: ${data.txHash}`,
-          timestamp: new Date()
-        }
-        setMessages(prev => [...prev, successMessage])
-      } else {
-        throw new Error(data.error || 'Error desconocido')
+      if (!data.success) {
+        throw new Error(data.error || 'Error validando datos')
       }
+
+      // Usar el contrato del Web3Context (conectado con MetaMask)
+      const contract = web3Contract || (signer ? new Contract(CONTRACT_ADDRESS, SUPPLY_CHAIN_ABI, signer) : null)
+      
+      if (!contract) {
+        throw new Error('Contrato no disponible. Asegúrate de estar conectado con MetaMask.')
+      }
+
+      let tx: any
+      const { action, params } = confirmationAction
+
+      // Ejecutar la transacción según la acción
+      switch (action) {
+        case 'change_user_status': {
+          tx = await contract.changeStatusUser(params.userAddress, params.newStatus)
+          break
+        }
+        case 'create_token': {
+          // Convertir arrays a BigInt
+          const parentIds = params.parentIds.map((id: number) => BigInt(id))
+          const parentAmounts = params.parentAmounts.map((amt: number) => BigInt(amt))
+          tx = await contract.createToken(
+            params.name,
+            BigInt(params.totalSupply),
+            params.features,
+            params.tokenType,
+            parentIds,
+            parentAmounts,
+            params.isRecall
+          )
+          break
+        }
+        case 'transfer_token': {
+          tx = await contract.transfer(params.to, params.tokenId, params.amount)
+          break
+        }
+        case 'accept_transfer': {
+          tx = await contract.acceptTransfer(params.transferId)
+          break
+        }
+        case 'reject_transfer': {
+          tx = await contract.rejectTransfer(params.transferId)
+          break
+        }
+        default:
+          throw new Error(`Acción desconocida: ${action}`)
+      }
+
+      // Esperar a que MetaMask firme y envíe la transacción
+      // Esto abrirá MetaMask para que el usuario apruebe
+      const receipt = await tx.wait()
+
+      const successMessage: Message = {
+        role: 'assistant',
+        content: `✅ Transacción confirmada y ejecutada exitosamente\n📋 Hash: ${tx.hash}\n⛽ Gas usado: ${receipt.gasUsed.toString()}`,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, successMessage])
     } catch (err: any) {
-      setError(err.message || 'Error al confirmar')
+      console.error('Error ejecutando transacción:', err)
+      
+      // Mensaje de error más descriptivo
+      let errorMsg = err.message || 'No se pudo ejecutar la transacción'
+      
+      // Si el error es de rechazo de usuario en MetaMask
+      if (err.code === 4001 || err.message?.includes('user rejected') || err.message?.includes('User denied')) {
+        errorMsg = 'Transacción cancelada por el usuario en MetaMask'
+      } else if (err.reason) {
+        errorMsg = err.reason
+      } else if (err.data) {
+        // Intentar decodificar el error del contrato
+        try {
+          const contract = web3Contract || (signer ? new Contract(CONTRACT_ADDRESS, SUPPLY_CHAIN_ABI, signer) : null)
+          if (contract) {
+            const decoded = contract.interface.parseError(err.data)
+            if (decoded) {
+              errorMsg = decoded.name || errorMsg
+            }
+          }
+        } catch {
+          // Si no se puede decodificar, usar el mensaje original
+        }
+      }
+
+      setError(errorMsg)
       const errorMessage: Message = {
         role: 'assistant',
-        content: `❌ Error al confirmar: ${err.message || 'No se pudo ejecutar la transacción'}`,
+        content: `❌ Error al confirmar: ${errorMsg}`,
         timestamp: new Date()
       }
       setMessages(prev => [...prev, errorMessage])
@@ -205,6 +314,11 @@ export function FloatingAssistantChat() {
               <div>
                 <h3 className="font-semibold">Asistente IA</h3>
                 <p className="text-xs text-primary-100">¿En qué puedo ayudarte?</p>
+                <p className="text-xs text-primary-200 mt-1 flex items-center gap-1">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary-500/30">
+                    Modelo: {llmModel}
+                  </span>
+                </p>
               </div>
             </div>
             <button
@@ -350,3 +464,6 @@ export function FloatingAssistantChat() {
     </>
   )
 }
+
+
+

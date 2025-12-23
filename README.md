@@ -286,6 +286,7 @@ Chat flotante disponible en todas las páginas con capacidades completas:
 - **Acciones**: Ejecución de acciones sobre el contrato (aprobar usuarios, crear tokens, transferir, etc.)
 - **Contexto**: Mantiene contexto de conversación para referencias como "este usuario" o "esta transferencia"
 - **Confirmaciones**: Modal de confirmación para transacciones que requieren firma
+- **Integración con MetaMask**: Todas las transacciones se firman con la cuenta conectada del usuario en MetaMask
 
 **Herramientas disponibles para la IA**:
 - Consulta: `get_token_status`, `list_all_tokens`, `get_user_info`, `list_all_users`, `get_transfer_info`, `list_all_transfers`, `get_user_tokens`, `get_user_transfers`, `get_system_stats`
@@ -294,6 +295,7 @@ Chat flotante disponible en todas las páginas con capacidades completas:
 **Requisitos**:
 - Ollama corriendo en `http://127.0.0.1:11434`
 - Modelo `llama3.2` disponible (o configurar otro modelo en `.env.local`)
+- MetaMask conectado para ejecutar transacciones
 
 ## 🧪 Testing
 

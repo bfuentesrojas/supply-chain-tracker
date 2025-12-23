@@ -96,3 +96,6 @@ echo -e "  - ${BLUE}MCP API:${NC}            http://localhost:3001"
 echo -e "  - ${BLUE}Anvil RPC:${NC}          http://127.0.0.1:8545"
 echo -e "  - ${BLUE}Contrato:${NC}           $CONTRACT_ADDR"
 echo ""
+
+
+

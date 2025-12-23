@@ -1038,24 +1038,84 @@ Esta función:
 | Documentación | ~10 min |
 | **Total Sesión 10** | **~225 minutos (~3h 45min)** |
 
+---
+
+## 2.15. Corrección del Flujo de Confirmación con MetaMask (Enero 2025)
+
+### Cambios en Backend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Corrección de conversión de tipos (newStatus string → number) | 15 min |
+| Normalización de campos (address/userAddress) | 20 min |
+| Validación temprana en executeTool | 15 min |
+| Mejoras en SYSTEM_PROMPT para aprobación de usuarios | 10 min |
+| Simplificación del endpoint /api/assistant/confirm | 20 min |
+| **Total Backend** | **~80 minutos** |
+
+### Cambios en Frontend
+
+| Tarea | Tiempo Estimado |
+|-------|-----------------|
+| Integración con MetaMask en FloatingAssistantChat | 30 min |
+| Manejo de errores de MetaMask | 10 min |
+| Mejoras en mensajes de éxito/error | 10 min |
+| **Total Frontend** | **~50 minutos** |
+
+### Problemas Resueltos
+
+1. **Error "Estado inválido"**: El LLM enviaba `newStatus` como string. Solución: conversión automática de tipos.
+
+2. **Error "Dirección de usuario inválida"**: El LLM no proporcionaba correctamente la dirección. Solución: normalización de campos y validación temprana.
+
+3. **Error "Solo el admin puede ejecutar esta funcion"**: El servidor firmaba con clave privada incorrecta. Solución: integración completa con MetaMask para firmar transacciones.
+
+### Funcionalidades Implementadas
+
+1. **Normalización de Tipos**:
+   - Conversión automática de strings a números para parámetros comunes
+   - Validación de tipos antes de ejecutar herramientas
+
+2. **Normalización de Campos**:
+   - Acepta `address` o `userAddress` en `change_user_status`
+   - Conversión automática de `address` → `userAddress`
+
+3. **Validación Temprana**:
+   - Validación en `executeTool` antes de requerir confirmación
+   - Mensajes de error descriptivos con hints
+
+4. **Integración con MetaMask**:
+   - Transacciones firmadas con la cuenta conectada del usuario
+   - Manejo de errores específicos de MetaMask
+   - Mensajes de éxito con hash y gas usado
+
+### Resumen de Sesión 11
+
+| Componente | Tiempo |
+|------------|--------|
+| Backend (Correcciones y mejoras) | ~80 min |
+| Frontend (Integración MetaMask) | ~50 min |
+| Documentación | ~5 min |
+| **Total Sesión 11** | **~135 minutos (~2h 15min)** |
+
 ### Resumen Total Actualizado
 
-| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Sesión 8 | Sesión 9 | Sesión 10 | Total |
-|------------|----------|----------|----------|----------|----------|----------|----------|----------|----------|-----------|-------|
-| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~43 min | ~30 min | - | - | **~139 min** |
-| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~52 min | ~57 min | ~80 min | ~55 min | **~589 min** |
-| Backend/APIs | - | - | - | - | - | - | - | - | ~103 min | ~160 min | **~263 min** |
-| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | ~5 min | ~10 min | ~10 min | **~65 min** |
-| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~100 min** | **~92 min** | **~193 min** | **~225 min** | **~1,061 min (~17h 41min)** |
+| Componente | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Sesión 8 | Sesión 9 | Sesión 10 | Sesión 11 | Total |
+|------------|----------|----------|----------|----------|----------|----------|----------|----------|----------|-----------|-----------|-------|
+| Smart Contracts | ~18 min | ~45 min | ~3 min | - | - | - | ~43 min | ~30 min | - | - | - | **~139 min** |
+| Frontend | ~48 min | ~33 min | ~25 min | ~135 min | ~63 min | ~46 min | ~52 min | ~57 min | ~80 min | ~55 min | ~50 min | **~639 min** |
+| Backend/APIs | - | - | - | - | - | - | - | - | ~103 min | ~160 min | ~80 min | **~343 min** |
+| Documentación | ~5 min | ~5 min | ~5 min | ~10 min | ~5 min | ~5 min | ~5 min | ~5 min | ~10 min | ~10 min | ~5 min | **~70 min** |
+| **TOTAL PROYECTO** | **~71 min** | **~83 min** | **~33 min** | **~145 min** | **~68 min** | **~51 min** | **~100 min** | **~92 min** | **~193 min** | **~225 min** | **~135 min** | **~1,196 min (~19h 56min)** |
 
 ### Estadísticas Finales Actualizadas
 
 | Métrica | Valor |
 |---------|-------|
-| Tiempo total de desarrollo | ~17h 41min |
-| Sesiones de desarrollo | 10 |
+| Tiempo total de desarrollo | ~19h 56min |
+| Sesiones de desarrollo | 11 |
 | Archivos de código creados | 100+ |
-| Líneas de código totales | ~18,000+ |
+| Líneas de código totales | ~18,500+ |
 | Tests unitarios | 55 (todos pasando) |
 | Páginas del frontend | 7 (incluye /tools) |
 | Componentes React | 13+ |
@@ -1065,7 +1125,7 @@ Esta función:
 | Tipos de token pharma | 5 |
 | Validadores Zod | 8 |
 | Herramientas de IA | 9 herramientas |
-| Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall, MCP Tools, Asistente de IA |
+| Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall, MCP Tools, Asistente de IA con MetaMask |
 
 ---
 

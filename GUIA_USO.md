@@ -305,3 +305,6 @@ No directamente. Debes contactar al Admin para que cambie tu rol manualmente.
 ---
 
 **¿Necesitas más ayuda?** Revisa el README.md para más detalles técnicos o consulta la documentación del código.
+
+
+
