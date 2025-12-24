@@ -443,9 +443,91 @@ Todas las validaciones incluyen verificación de dígito de control (Modulo 10).
 - ✅ Mejora del parsing de errores del contrato para mostrar mensajes descriptivos
 - ✅ Validaciones mejoradas en frontend antes de enviar transacciones
 
+## 📊 Diagramas de Arquitectura y Flujo de Datos
+
+El proyecto incluye diagramas detallados en formato Mermaid que documentan la arquitectura completa y los flujos de datos del sistema. Ver `DIAGRAMAS.md` para visualización completa.
+
+### Diagramas de Arquitectura
+
+1. **Arquitectura General del Sistema**
+   - Vista completa de todos los componentes: Frontend (Next.js), Backend APIs, Servidor MCP, Blockchain (Anvil), y servicios externos (Ollama, MetaMask)
+   - Muestra las conexiones entre todos los módulos del sistema
+
+2. **Arquitectura de Smart Contract**
+   - Diagrama de clases del contrato `SupplyChain.sol`
+   - Structs (Token, User, Transfer), Enums (TokenType, UserRole, UserStatus, TransferStatus), y sus relaciones
+
+3. **Arquitectura de Componentes Frontend**
+   - Estructura de componentes React, páginas, contextos, hooks y utilidades
+   - Muestra la jerarquía y dependencias entre componentes
+
+4. **Arquitectura del Servidor MCP**
+   - Integración con Claude Desktop mediante STDIO
+   - 11 herramientas Foundry disponibles como herramientas MCP
+
+5. **Arquitectura de APIs**
+   - Estructura de endpoints Next.js App Router y Express Server
+   - Servicios y sus interconexiones
+
+### Diagramas de Flujo de Datos
+
+6. **Flujo de Creación de Token**
+   - Secuencia completa desde el formulario del usuario hasta la confirmación en blockchain
+   - Incluye validaciones, MetaMask, y creación del token
+
+7. **Flujo de Transferencia de Token**
+   - Proceso completo de transferencia: creación de solicitud, aceptación/rechazo, y actualización de balances
+   - Interacción entre remitente y destinatario
+
+8. **Flujo del Asistente de IA**
+   - Interacción del usuario con el chat, procesamiento por Ollama, ejecución de herramientas, y confirmación de transacciones
+   - Integración con MetaMask para firmar transacciones
+
+9. **Flujo de Jerarquía de Tokens**
+   - Construcción recursiva del árbol de jerarquía de tokens
+   - Procesamiento de padres, componentes BOM, y tokens compliance
+
+10. **Flujo de Descuento Automático de Supply (PT_LOTE)**
+    - Validación y descuento automático de componentes al crear un lote
+    - Cálculo de cantidades necesarias y verificación de balances
+
+11. **Flujo de Sistema de Recall**
+    - Marcado recursivo de cadena de suministro como retirada
+    - Propagación de recall a padres e hijos
+
+12. **Flujo de Trazabilidad Completa**
+    - Construcción de jerarquía y timeline de transferencias
+    - Visualización completa de la cadena de suministro
+
+### Diagramas de Sistemas
+
+13. **Sistema de Roles y Permisos**
+    - Flujo de autenticación, registro, aprobación y asignación de permisos
+    - Diferentes niveles de acceso según rol
+
+14. **Arquitectura de Validaciones**
+    - Capas de validación: Schema JSON, Validadores Zod, Validaciones GS1, y validaciones en contrato
+    - Flujo completo desde input hasta creación exitosa
+
+15. **Flujo de Autenticación y Autorización**
+    - Verificación de MetaMask, red correcta, estado de usuario, y control de acceso por página
+
+### Visualización de Diagramas
+
+Los diagramas están en formato Mermaid y se pueden visualizar:
+- **En GitHub**: Se renderizan automáticamente al ver `DIAGRAMAS.md`
+- **En editores**: VS Code, Cursor, y otros editores con soporte Mermaid
+- **Online**: [Mermaid Live Editor](https://mermaid.live/) - copiar y pegar el código del diagrama
+
+Ejemplo de uso:
+```markdown
+Ver diagrama completo en: DIAGRAMAS.md
+```
+
 ## 🗂️ Documentación Adicional
 
 - `IA.md` - Retrospectiva completa del uso de IA en el desarrollo
+- `DIAGRAMAS.md` - Diagramas de arquitectura y flujo de datos (15 diagramas Mermaid)
 - `chats/` - Logs de sesiones de desarrollo con IA
 
 ## 📝 Licencia
