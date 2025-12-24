@@ -155,12 +155,21 @@ Copiar la dirección del contrato desplegado y actualizar en:
 - `web/src/contracts/SupplyChain.ts` → `CONTRACT_ADDRESS`
 - `web/.env.local` → `CONTRACT` y `NEXT_PUBLIC_CONTRACT`
 
-#### 5. Iniciar servidor MCP API (opcional, para herramientas)
+#### 5. Iniciar servidor MCP (opcional)
+
+**Servidor MCP Real (para Claude Desktop):**
 ```bash
-./start-mcp-api.sh
-# O manualmente:
 cd web
-npx tsx server/mcp-api-server.ts
+npm run start:mcp-server
+# O usando npx directamente:
+npx -y tsx server/mcp-server.ts
+```
+📖 Ver documentación de Claude Desktop para configurar MCP servers
+
+**API REST Legacy (para interfaz web `/tools`):**
+```bash
+cd web
+npm run start:mcp-api
 ```
 
 #### 6. Iniciar frontend
@@ -265,8 +274,16 @@ Panel de administración:
 - Búsqueda por dirección
 - Acciones de cambio de estado
 
-#### 🛠️ Herramientas MCP (`/tools`)
-Interfaz para gestionar herramientas Foundry:
+#### 🛠️ Herramientas Foundry
+
+**Opción 1: Servidor MCP Real (Recomendado para Claude Desktop)**
+- ✅ Implementa protocolo MCP estándar de Anthropic
+- ✅ Compatible con Claude Desktop y otros clientes MCP
+- ✅ 11 herramientas Foundry disponibles como herramientas MCP
+- 🚀 Iniciar con: `cd web && npm run start:mcp-server`
+
+**Opción 2: Interfaz Web (`/tools`)**
+- Interfaz web para gestionar herramientas Foundry
 - **Health Check**: Verifica estado de herramientas Foundry y Anvil
 - **Forge Build**: Compila smart contracts
 - **Forge Test**: Ejecuta tests con verbosidad configurable
@@ -276,7 +293,7 @@ Interfaz para gestionar herramientas Foundry:
 - **Cast Call**: Ejecuta llamadas de solo lectura a contratos
 - **Cast Send**: Envía transacciones a contratos
 - Frontend disponible en `http://localhost:3000/tools`
-- API disponible en `http://localhost:3001`
+- API REST disponible en `http://localhost:3001` (legacy, no es MCP estándar)
 
 #### 🤖 Asistente de IA
 Chat flotante disponible en todas las páginas con capacidades completas:

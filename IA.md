@@ -1129,5 +1129,106 @@ Esta función:
 
 ---
 
+---
+
+## 2.16. Debugging y Optimización del Servidor MCP Foundry (Diciembre 2024 - Enero 2025)
+
+### Problema Identificado
+
+El servidor MCP para Foundry Tools experimentaba errores recurrentes `ENOENT` al ejecutar comandos `forge_test` y `forge_build` desde Claude Desktop, aunque `health_check` funcionaba correctamente.
+
+**Observación clave**: 
+- ✅ `health_check` funciona usando `execFileAsync` sin `cwd`
+- ❌ `forge_test`/`forge_build` fallaban con múltiples estrategias (`execFile`, `spawn`, `exec`)
+
+### Estrategias Implementadas
+
+#### 1. Logging Detallado
+- Implementado sistema de logging con `DEBUG_FOUNDRY=true`
+- Logs detallados de rutas, PATH, argumentos, y estadísticas de binarios
+- Diagnóstico mejorado de errores ENOENT
+
+#### 2. Verificación Robusta de Rutas
+- Resolución de symlinks con `realpath()`
+- Verificación de tipo de archivo (no directorio)
+- Verificación de permisos de ejecución (`X_OK`)
+- Validación del cache antes de usar
+
+#### 3. Fallback Inteligente
+- Fallback a `~/.foundry/bin/tool` si la ruta encontrada falla
+- Actualización automática del cache con rutas correctas
+- Limpieza automática de cache en errores
+
+#### 4. Estrategia Final: Replicar health_check
+- **Solución**: Replicar exactamente el entorno de `health_check`
+- Si se especifica `cwd` explícitamente → usarlo directamente
+- Si NO se especifica `cwd` → intentar sin `cwd` primero (como `health_check`)
+- Mismo `env` que `health_check`: `{ ...process.env, PATH: \`${HOME}/.foundry/bin:${PATH}\` }`
+
+### Cambios en Código
+
+**Archivo**: `web/src/lib/foundryTools.ts`
+
+1. **Mejoras en `findFoundryBinary()`**:
+   - Verificación de cache con validación de existencia
+   - Verificación de tipo de archivo (no directorio)
+   - Verificación de permisos de ejecución
+
+2. **Mejoras en `executeFoundryCommand()`**:
+   - Lógica condicional para `cwd`:
+     - Si `options.cwd` está especificado → usar directamente
+     - Si no → intentar sin `cwd` primero, luego con `cwd` como fallback
+   - Entorno replicado de `health_check`
+   - Fallback a `exec()` con shell si `execFileAsync` falla
+
+### Resumen de Sesión 12
+
+| Componente | Tiempo |
+|------------|--------|
+| Análisis del problema | ~30 min |
+| Implementación de estrategias | ~90 min |
+| Testing y correcciones | ~60 min |
+| Documentación | ~20 min |
+| **Total Sesión 12** | **~200 minutos (~3h 20min)** |
+
+### Resumen Total Actualizado
+
+| Componente | Sesión 1-11 | Sesión 12 | Total |
+|------------|-------------|-----------|-------|
+| Smart Contracts | ~139 min | - | **~139 min** |
+| Frontend | ~639 min | - | **~639 min** |
+| Backend/APIs | ~343 min | ~200 min | **~543 min** |
+| Documentación | ~70 min | ~20 min | **~90 min** |
+| **TOTAL PROYECTO** | **~1,196 min** | **~220 min** | **~1,416 min (~23h 36min)** |
+
+### Estadísticas Finales Actualizadas
+
+| Métrica | Valor |
+|---------|-------|
+| Tiempo total de desarrollo | ~23h 36min |
+| Sesiones de desarrollo | 12 |
+| Archivos de código creados | 100+ |
+| Líneas de código totales | ~19,000+ |
+| Tests unitarios | 55 (todos pasando) |
+| Páginas del frontend | 7 (incluye /tools) |
+| Componentes React | 13+ |
+| Hooks personalizados | 1 |
+| Contratos Solidity | 1 |
+| APIs REST | 8 endpoints (6 MCP + 2 Assistant) |
+| Servidor MCP | 1 (11 herramientas Foundry) |
+| Tipos de token pharma | 5 |
+| Validadores Zod | 8 |
+| Herramientas de IA | 9 herramientas |
+| Funcionalidades principales | Sistema completo de trazabilidad, múltiples padres, descuento de supply, sistema de recall, MCP Tools, Asistente de IA con MetaMask |
+
+### Lecciones Aprendidas
+
+1. **Importancia del entorno**: Diferencias sutiles en `cwd` y `env` pueden causar fallos
+2. **Replicar estrategias exitosas**: Si algo funciona, replicarlo exactamente
+3. **Debugging sistemático**: Logging detallado es esencial para diagnosticar problemas complejos
+4. **Múltiples estrategias**: Tener fallbacks robustos mejora la confiabilidad
+
+---
+
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
 *Última actualización: Enero 2025*

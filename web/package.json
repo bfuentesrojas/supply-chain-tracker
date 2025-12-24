@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "next dev",
     "dev:mcp-api": "tsx watch server/mcp-api-server.ts",
+    "dev:mcp-server": "tsx server/mcp-server.ts",
     "build": "next build",
     "start": "next start",
     "start:mcp-api": "tsx server/mcp-api-server.ts",
+    "start:mcp-server": "tsx server/mcp-server.ts",
     "lint": "next lint"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "cors": "^2.8.5",
     "ethers": "^6.13.4",
     "express": "^4.22.1",

@@ -124,3 +124,4 @@ El asistente de IA ahora puede:
 - El `PRIVKEY` en `.env.local` ya no se usa, pero se mantiene por compatibilidad
 - Todas las transacciones ahora requieren aprobación del usuario en MetaMask
 - El sistema valida permisos antes de ejecutar acciones
+

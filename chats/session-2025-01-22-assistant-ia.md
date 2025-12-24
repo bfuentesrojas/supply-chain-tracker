@@ -118,3 +118,4 @@ Implementación completa de un asistente de IA integrado en la aplicación con c
 
 *Sesión registrada el 22 de Enero, 2025*
 
+
