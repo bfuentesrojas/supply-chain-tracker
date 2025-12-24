@@ -103,7 +103,8 @@ classDiagram
         +uint256 dateCreated
     }
 
-    enum TokenType {
+    class TokenType {
+        <<enumeration>>
         API_MP
         BOM
         PT_LOTE
@@ -111,7 +112,8 @@ classDiagram
         COMPLIANCE_LOG
     }
 
-    enum UserRole {
+    class UserRole {
+        <<enumeration>>
         Admin
         Fabricante
         Distribuidor
@@ -119,14 +121,16 @@ classDiagram
         Consumidor
     }
 
-    enum UserStatus {
+    class UserStatus {
+        <<enumeration>>
         Pending
         Approved
         Rejected
         Canceled
     }
 
-    enum TransferStatus {
+    class TransferStatus {
+        <<enumeration>>
         Pending
         Accepted
         Rejected
@@ -316,7 +320,7 @@ graph LR
 
 ```mermaid
 graph TD
-    Start[Usuario consulta token] --> GetToken[getToken(tokenId)]
+    Start[Usuario consulta token] --> GetToken[getToken con tokenId]
     GetToken --> ExtractParents[Extraer parentIds del token]
     ExtractParents --> CheckParents{¿Tiene padres?}
     CheckParents -->|Sí| Recursive[Recursión: getToken para cada padre]
@@ -586,7 +590,7 @@ graph TB
     UserApproves -->|Sí| GetAccount[Obtener cuenta]
     GetAccount --> CheckNetwork{¿Red correcta? ChainId 31337}
     CheckNetwork -->|No| SwitchNetwork[Cambiar a Anvil Local]
-    CheckNetwork -->|Sí| GetUserInfo[getUserInfo(address)]
+    CheckNetwork -->|Sí| GetUserInfo[getUserInfo con address]
     GetUserInfo --> UserExists{¿Usuario existe?}
     UserExists -->|No| RegisterUser[Registrar nuevo usuario]
     UserExists -->|Sí| GetStatus[Obtener estado]
