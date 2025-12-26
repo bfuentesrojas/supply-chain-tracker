@@ -1,0 +1,30 @@
+{
+  "name": "supply-chain-tracker-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev:mcp-api": "tsx watch src/server/mcp-api-server.ts",
+    "dev:mcp-server": "tsx src/server/mcp-server.ts",
+    "start:mcp-api": "tsx src/server/mcp-api-server.ts",
+    "start:mcp-server": "tsx src/server/mcp-server.ts",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.1",
+    "cors": "^2.8.5",
+    "express": "^4.22.1",
+    "tsx": "^4.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.25",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.17.6",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.6.3"
+  }
+}

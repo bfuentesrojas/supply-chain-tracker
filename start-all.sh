@@ -21,7 +21,7 @@ MCP_API_URL="http://localhost:3001"
 MCP_API_PORT=3001
 FRONTEND_PORT=3000
 ANVIL_PORT=8545
-WEB_DIR="web"
+FRONTEND_DIR="frontend"
 MCP_API_PID_FILE="/tmp/mcp-api.pid"
 
 # Función para limpiar procesos al salir
@@ -120,8 +120,8 @@ echo -e "${GREEN}========================================${NC}"
 echo ""
 
 # Verificar que estamos en el directorio correcto
-if [ ! -d "$WEB_DIR" ]; then
-    echo -e "${RED}Error: No se encuentra el directorio $WEB_DIR/${NC}"
+if [ ! -d "$FRONTEND_DIR" ]; then
+    echo -e "${RED}Error: No se encuentra el directorio $FRONTEND_DIR/${NC}"
     echo "Ejecuta este script desde la raíz del proyecto"
     exit 1
 fi
@@ -139,9 +139,9 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Verificar que node_modules existe
-if [ ! -d "$WEB_DIR/node_modules" ]; then
+if [ ! -d "$FRONTEND_DIR/node_modules" ]; then
     echo -e "${YELLOW}Instalando dependencias del frontend...${NC}"
-    cd "$WEB_DIR"
+    cd "$FRONTEND_DIR"
     npm install
     cd ..
 fi
@@ -151,7 +151,7 @@ echo ""
 
 # Paso 1: Iniciar MCP API Server
 echo -e "${GREEN}[1/5] Iniciando MCP API Server (puerto $MCP_API_PORT)...${NC}"
-cd "$WEB_DIR"
+cd "$FRONTEND_DIR/../backend"
 
 # Matar proceso existente si hay uno
 if [ -f "$MCP_API_PID_FILE" ]; then
@@ -227,15 +227,15 @@ if [ $DEPLOY_SUCCESS -eq 0 ]; then
         echo -e "${YELLOW}Actualizando archivos de configuración...${NC}"
         
         # Actualizar SupplyChain.ts
-        if [ -f "$WEB_DIR/src/contracts/SupplyChain.ts" ]; then
-            sed -i "s|export const CONTRACT_ADDRESS = '0x[a-fA-F0-9]*'|export const CONTRACT_ADDRESS = '$CONTRACT_ADDR'|" "$WEB_DIR/src/contracts/SupplyChain.ts"
-            echo -e "${GREEN}✓ Actualizado web/src/contracts/SupplyChain.ts${NC}"
+        if [ -f "$FRONTEND_DIR/src/contracts/SupplyChain.ts" ]; then
+            sed -i "s|export const CONTRACT_ADDRESS = '0x[a-fA-F0-9]*'|export const CONTRACT_ADDRESS = '$CONTRACT_ADDR'|" "$FRONTEND_DIR/src/contracts/SupplyChain.ts"
+            echo -e "${GREEN}✓ Actualizado frontend/src/contracts/SupplyChain.ts${NC}"
         fi
         
         # Actualizar .env.local si existe
-        if [ -f "$WEB_DIR/.env.local" ]; then
-            sed -i "s|^CONTRACT=.*|CONTRACT=$CONTRACT_ADDR|" "$WEB_DIR/.env.local"
-            sed -i "s|^NEXT_PUBLIC_CONTRACT=.*|NEXT_PUBLIC_CONTRACT=$CONTRACT_ADDR|" "$WEB_DIR/.env.local"
+        if [ -f "$FRONTEND_DIR/.env.local" ]; then
+            sed -i "s|^CONTRACT=.*|CONTRACT=$CONTRACT_ADDR|" "$FRONTEND_DIR/.env.local"
+            sed -i "s|^NEXT_PUBLIC_CONTRACT=.*|NEXT_PUBLIC_CONTRACT=$CONTRACT_ADDR|" "$FRONTEND_DIR/.env.local"
             echo -e "${GREEN}✓ Actualizado web/.env.local${NC}"
         fi
         
@@ -279,8 +279,9 @@ echo ""
 echo -e "${YELLOW}Presiona Ctrl+C para detener todos los servicios${NC}"
 echo ""
 
-cd "$WEB_DIR"
+cd "$FRONTEND_DIR"
 npx next dev -p $FRONTEND_PORT
+
 
 
 

@@ -125,3 +125,4 @@ El asistente de IA ahora puede:
 - Todas las transacciones ahora requieren aprobación del usuario en MetaMask
 - El sistema valida permisos antes de ejecutar acciones
 
+

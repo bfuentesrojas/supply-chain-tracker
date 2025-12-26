@@ -137,3 +137,4 @@ El servidor MCP ahora puede:
 ---
 
 *Última actualización: Diciembre 2024*
+
