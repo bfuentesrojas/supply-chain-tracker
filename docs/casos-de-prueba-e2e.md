@@ -551,6 +551,17 @@ createToken(
     "deviceInfo": {
       "model": "DataLogger Pro",
       "serialNumber": "DL-2024-001"
+    },
+    "documents": [
+      {
+        "name": "DataLogger CSV",
+        "hash": "0x1234567890abcdef",
+        "uri": "ipfs://QmXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXxXx"
+      }
+    ],
+    "parents": {
+      "linking_strategy": "single_parent",
+      "primary_parent_id": 5
     }
   }),
   tokenType: 4, // COMPLIANCE_LOG
@@ -626,6 +637,22 @@ createToken(
     "regulatoryNotification": {
       "ispNotificationDate": "2024-02-10",
       "ispNotificationNumber": "ISP-REC-2024-001"
+    },
+    "documents": [
+      {
+        "name": "Informe de Análisis de Control",
+        "hash": "0xabcdef1234567890",
+        "uri": "ipfs://QmYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYyYy"
+      },
+      {
+        "name": "Notificación ISP",
+        "hash": "0x9876543210fedcba",
+        "uri": "ipfs://QmZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZzZz"
+      }
+    ],
+    "parents": {
+      "linking_strategy": "single_parent",
+      "primary_parent_id": 4
     }
   }),
   tokenType: 4, // COMPLIANCE_LOG
@@ -984,7 +1011,9 @@ Consumidor:   0x90F79bf6EB2c4f870365E785982E1f101E93b906
      - `type`: "COMPLIANCE_LOG"
      - `logType`: "TEMP_LOG", "CAPA", o "RECALL"
      - Campos específicos según `logType` (ver interfaces en `frontend/src/types/pharma.ts`)
-     - **NO incluye**: `schema_version`, `labels`, `documents` (en algunos casos), `parents`
+     - `documents`: array con al menos un elemento (cada elemento tiene `name` requerido, `hash` y `uri` opcionales)
+     - `parents`: objeto con `linking_strategy` ("single_parent") y `primary_parent_id` (integer mínimo 1)
+     - **NO incluye**: `schema_version`, `labels`
    
    Los JSONs en este documento coinciden exactamente con la estructura generada por los builders de los formularios. Para más detalles, consultar `frontend/src/builders/pharma.ts` y `frontend/src/types/pharma.ts`.
 

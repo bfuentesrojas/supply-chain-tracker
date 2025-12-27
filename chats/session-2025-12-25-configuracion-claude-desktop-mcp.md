@@ -1,6 +1,6 @@
 # Sesión: Configuración de Claude Desktop y Servidor MCP Foundry Tools
 
-**Fecha**: 26 de Enero, 2025  
+**Fecha**: 25 de Diciembre, 2025  
 **IA**: Claude (Auto) via Cursor IDE  
 **Idioma**: Español
 

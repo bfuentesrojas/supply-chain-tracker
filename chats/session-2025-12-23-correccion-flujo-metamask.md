@@ -1,5 +1,5 @@
 # Sesión: Corrección del Flujo de Confirmación con MetaMask
-**Fecha**: 23 de Enero, 2025  
+**Fecha**: 23 de Diciembre, 2025  
 **Duración**: ~1h 30min  
 **Modelo IA**: Claude Opus 4.5 (Cursor IDE)
 

@@ -39,6 +39,9 @@ function TrackContentInner() {
   const [userRole, setUserRole] = useState<string | null>(null)
   const [parentTokens, setParentTokens] = useState<Token[]>([])
   const [isLoadingParents, setIsLoadingParents] = useState(false)
+  const [bomParent, setBomParent] = useState<Token | null>(null)
+  const [bomComponents, setBomComponents] = useState<Token[]>([])
+  const [isLoadingBomInfo, setIsLoadingBomInfo] = useState(false)
   
   // Historial de navegación para el botón volver
   const [navigationHistory, setNavigationHistory] = useState<string[]>([])
@@ -131,6 +134,43 @@ function TrackContentInner() {
         }
       } else {
         setParentTokens([])
+      }
+
+      // Si es un PT_LOTE, cargar información del BOM padre y sus componentes
+      if (tokenType === 'PT_LOTE' && tokenData.parentIds.length > 0) {
+        setIsLoadingBomInfo(true)
+        setBomParent(null)
+        setBomComponents([])
+        try {
+          // El primer padre debería ser el BOM
+          const bomId = tokenData.parentIds[0]
+          const bomToken = await getToken(bomId)
+          if (bomToken) {
+            setBomParent(bomToken)
+            // Cargar los componentes del BOM (que son los parentIds del BOM)
+            if (bomToken.parentIds.length > 0) {
+              const components: Token[] = []
+              for (let i = 0; i < bomToken.parentIds.length; i++) {
+                try {
+                  const componentToken = await getToken(bomToken.parentIds[i])
+                  if (componentToken) {
+                    components.push(componentToken)
+                  }
+                } catch (err) {
+                  console.error(`Error cargando componente ${bomToken.parentIds[i]}:`, err)
+                }
+              }
+              setBomComponents(components)
+            }
+          }
+        } catch (err) {
+          console.error('Error cargando información del BOM:', err)
+        } finally {
+          setIsLoadingBomInfo(false)
+        }
+      } else {
+        setBomParent(null)
+        setBomComponents([])
       }
 
       // Cargar traza completa
@@ -587,6 +627,126 @@ function TrackContentInner() {
                   ) : (
                     <div className="p-4 bg-surface-50 rounded-lg text-center text-surface-500">
                       No se pudieron cargar los tokens padre
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Información del BOM padre y componentes para PT_LOTE */}
+              {token.parentIds.length > 0 && tokenTypeNumberToString(token.tokenType) === 'PT_LOTE' && (
+                <div className="mt-6 pt-6 border-t border-surface-200">
+                  <h4 className="text-md font-semibold text-surface-800 mb-4">Receta (BOM) y Componentes</h4>
+                  {isLoadingBomInfo ? (
+                    <div className="flex justify-center py-4">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+                    </div>
+                  ) : bomParent ? (
+                    <div className="space-y-4">
+                      {/* Información del BOM padre */}
+                      <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs text-primary-600 font-semibold uppercase">BOM Padre</span>
+                              <button
+                                onClick={() => {
+                                  setTokenId(bomParent.id.toString())
+                                  handleSearchToken(bomParent.id.toString())
+                                }}
+                                className="text-primary-600 hover:text-primary-700 font-mono text-sm font-semibold"
+                              >
+                                #{bomParent.id.toString()} →
+                              </button>
+                              <span className="text-sm text-surface-800 font-medium">
+                                {bomParent.name}
+                              </span>
+                            </div>
+                            <div className="text-xs text-surface-500 space-y-1">
+                              <p>Tipo: {formatTypeWithDescription(tokenTypeNumberToString(bomParent.tokenType) || '')}</p>
+                              <p>Supply: {formatNumber(bomParent.totalSupply)}</p>
+                              {token.parentAmounts.length > 0 && (
+                                <p>
+                                  Cantidad usada: {(Number(token.parentAmounts[0]) / 1000).toLocaleString('es-ES', {
+                                    minimumFractionDigits: 3,
+                                    maximumFractionDigits: 3
+                                  })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Componentes del BOM */}
+                      {bomComponents.length > 0 && bomParent.parentIds.length > 0 && (
+                        <div>
+                          <h5 className="text-sm font-semibold text-surface-700 mb-3">Componentes de la Receta</h5>
+                          <div className="space-y-3">
+                            {bomParent.parentIds.map((componentId, idx) => {
+                              const componentToken = bomComponents.find(c => c.id === componentId)
+                              const componentAmountPerUnit = bomParent.parentAmounts[idx]
+                              const lotAmount = token.parentAmounts.length > 0 ? token.parentAmounts[0] : BigInt(0)
+                              // Calcular cantidad total consumida: (cantidad_lote * cantidad_por_unidad) / 1000 / 1000
+                              // porque ambos están multiplicados por 1000
+                              const totalAmount = componentAmountPerUnit && lotAmount
+                                ? (Number(lotAmount) * Number(componentAmountPerUnit)) / 1000000
+                                : 0
+
+                              return (
+                                <div key={idx} className="p-4 bg-surface-50 rounded-lg border border-surface-200">
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <button
+                                          onClick={() => {
+                                            setTokenId(componentId.toString())
+                                            handleSearchToken(componentId.toString())
+                                          }}
+                                          className="text-primary-600 hover:text-primary-700 font-mono text-sm font-semibold"
+                                        >
+                                          #{componentId.toString()} →
+                                        </button>
+                                        {componentToken && (
+                                          <span className="text-sm text-surface-800 font-medium">
+                                            {componentToken.name}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {componentToken && (
+                                        <div className="text-xs text-surface-500 space-y-1">
+                                          <p>Tipo: {formatTypeWithDescription(tokenTypeNumberToString(componentToken.tokenType) || '')}</p>
+                                          <p>Supply: {formatNumber(componentToken.totalSupply)}</p>
+                                          {componentAmountPerUnit && (
+                                            <p>
+                                              Por unidad: {(Number(componentAmountPerUnit) / 1000).toLocaleString('es-ES', {
+                                                minimumFractionDigits: 3,
+                                                maximumFractionDigits: 3
+                                              })}
+                                            </p>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm text-surface-500 mb-1">Cantidad Total</p>
+                                      <p className="text-lg font-semibold text-surface-800">
+                                        {totalAmount.toLocaleString('es-ES', {
+                                          minimumFractionDigits: 3,
+                                          maximumFractionDigits: 3
+                                        })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-surface-50 rounded-lg text-center text-surface-500">
+                      No se pudo cargar la información del BOM
                     </div>
                   )}
                 </div>

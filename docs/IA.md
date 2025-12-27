@@ -322,15 +322,22 @@ cast send <address> --value 10ether --private-key <anvil-key>
 ### Archivos de Sesión
 - `chats/session-2024-12-02-supply-chain.md` - Sesión inicial
 - `chats/session-2024-12-03-refactor.md` - Sesión de reestructuración
+- `chats/session-2024-12-16-mejoras-ui-validaciones.md` - Mejoras UI y validaciones
+- `chats/session-2024-12-18-automatizacion-ambiente.md` - Automatización del ambiente
+- `chats/session-2024-12-24-debugging-mcp-foundry.md` - Debugging MCP Foundry
+- `chats/session-2025-01-22-assistant-ia.md` - Asistente de IA integrado
+- `chats/session-2025-01-23-correccion-flujo-metamask.md` - Corrección flujo MetaMask
+- `chats/session-2025-01-26-configuracion-claude-desktop-mcp.md` - Configuración Claude Desktop y MCP
+- `chats/session-2025-01-27-mejoras-trazabilidad-validaciones.md` - Mejoras trazabilidad y validaciones
 
 ### Métricas Finales del Chat
 
-| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Total |
-|---------|----------|----------|----------|----------|----------|----------|----------|-------|
-| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~8 | ~15 | ~64 |
-| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 6+ | 12+ | 78+ |
-| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~600 | ~1,500 | ~13,200 |
-| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 | 55 | 55 (final) |
+| Métrica | Sesión 1 | Sesión 2 | Sesión 3 | Sesión 4 | Sesión 5 | Sesión 6 | Sesión 7 | Sesión 8-13 | Sesión 14 | Total |
+|---------|----------|----------|----------|----------|----------|----------|----------|-------------|-----------|-------|
+| Prompts del usuario | 2 | 4 | 3 | ~20 | ~12 | ~8 | ~15 | ~50+ | ~3 | ~117+ |
+| Archivos creados/modificados | 20+ | 15+ | 8 | 25+ | 10+ | 6+ | 12+ | 30+ | 3 | ~131+ |
+| Líneas de código generadas | ~3,500 | ~2,000 | ~400 | ~4,000 | ~1,200 | ~600 | ~1,500 | ~6,800 | ~160 | ~20,160+ |
+| Tests implementados | 24 | 50 | 50 | 50 | 50 | 50 | 55 | 55 | 55 | 55 (final) |
 
 ---
 
@@ -1334,5 +1341,70 @@ execAsync(`cd "/path/to/contracts" && ${forgePath} test`, {
 
 ---
 
+## 2.18. Mejoras Finales de Trazabilidad y Validaciones (Enero 2025)
+
+### Sesión 14: Mejoras Trazabilidad y Validaciones (27 de Enero, 2025)
+
+Esta sesión se enfocó en mejoras finales del sistema, especialmente en la visualización de trazabilidad y validaciones de JSON.
+
+#### Cambios Implementados
+
+1. **Actualización de JSONs de COMPLIANCE_LOG**:
+   - Agregados campos requeridos `documents` y `parents` a todos los JSONs de COMPLIANCE_LOG en casos de prueba
+   - Actualizada documentación para reflejar campos requeridos
+
+2. **Visualización de BOM Padre y Componentes para PT_LOTE**:
+   - Nueva sección en página de trazabilidad que muestra:
+     - Información del BOM padre (ID, nombre, tipo, supply, cantidad usada)
+     - Lista completa de componentes del BOM con cantidades
+     - Cálculo de cantidad total consumida por componente
+   - Navegación clickable a tokens padre y componentes
+   - Implementado en `frontend/src/app/track/page.tsx`
+
+3. **Actualización de README.md**:
+   - Información personal del autor
+   - Enlace al video de presentación en Loom
+
+#### Resumen de Sesión 14
+
+| Componente | Tiempo |
+|------------|--------|
+| Actualización JSONs COMPLIANCE_LOG | ~15 min |
+| Implementación visualización BOM para PT_LOTE | ~40 min |
+| Actualización README | ~5 min |
+| **Total Sesión 14** | **~60 minutos (~1h)** |
+
+### Resumen Total Actualizado (Sesiones 1-14)
+
+| Componente | Sesiones 1-13 | Sesión 14 | Total |
+|------------|---------------|-----------|-------|
+| Smart Contracts | ~139 min | - | **~139 min** |
+| Frontend | ~639 min | ~40 min | **~679 min** |
+| Backend/APIs | ~743 min | - | **~743 min** |
+| Documentación | ~115 min | ~20 min | **~135 min** |
+| **TOTAL PROYECTO** | **~1,641 min** | **~60 min** | **~1,701 min (~28h 21min)** |
+
+### Estadísticas Finales Actualizadas (Sesiones 1-14)
+
+| Métrica | Valor |
+|---------|-------|
+| Tiempo total de desarrollo | ~28h 21min |
+| Sesiones de desarrollo | 14 |
+| Archivos de código creados | 108+ |
+| Líneas de código totales | ~20,160+ |
+| Tests unitarios | 55 (todos pasando) |
+| Páginas del frontend | 7 (incluye /tools) |
+| Componentes React | 13+ |
+| Hooks personalizados | 1 |
+| Contratos Solidity | 1 |
+| APIs REST | 8 endpoints (6 MCP + 2 Assistant) |
+| Servidor MCP | 1 (11 herramientas Foundry) |
+| Tipos de token pharma | 5 |
+| Validadores Zod | 8 |
+| Herramientas de IA | 9 herramientas |
+| Documentación técnica | 5 documentos principales |
+
+---
+
 *Documento actualizado como parte de la retrospectiva del proyecto Supply Chain Tracker*
-*Última actualización: Enero 2025*
+*Última actualización: 27 de Enero, 2025*

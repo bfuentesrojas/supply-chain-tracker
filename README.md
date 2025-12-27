@@ -173,7 +173,7 @@ Estas capturas proporcionan una guía visual completa para entender el funcionam
 
 ## Video Demostración
 
-🎥 [Ver video] *(Nota: Agregar enlace al video demostrativo)*
+🎥 [Ver video de presentación](https://www.loom.com/share/349b825a05854442afc6c0ba991f4738)
 
 ## Innovaciones Implementadas
 
@@ -265,9 +265,9 @@ El proyecto ha sido desarrollado con asistencia significativa de IA utilizando:
 
 ## Autor
 
-- **Nombre:** [Tu nombre]
-- **Email:** [tu-email@example.com]
-- **LinkedIn:** [tu-perfil]
+- **Nombre:** Boris Fuentes
+- **Email:** bfuentesrojas@gmail.com
+- **LinkedIn:** [www.linkedin.com/in/boris-fuentes](https://www.linkedin.com/in/boris-fuentes)
 
 ## Licencia
 
